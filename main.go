@@ -55,5 +55,5 @@ func sse(w http.ResponseWriter, r *http.Request) {
 func main() {
 	http.HandleFunc("/health", sse)
 	http.Handle("/", http.FileServer(http.Dir("public")))
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":8000", nil)
 }
