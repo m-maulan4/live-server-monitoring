@@ -9,13 +9,14 @@ import (
 )
 
 type snapshot struct {
-	Server  modules.Server    `json:"server"`
-	CPU     modules.CPU       `json:"cpu"`
-	RAM     modules.RAM       `json:"ram"`
-	Storage []modules.Storage `json:"storage"`
-	Zram    modules.Zram      `json:"zram"`
-	Network []modules.Network `json:"network"`
-	Logs    []modules.Log     `json:"logs"`
+	Server    modules.Server    `json:"server"`
+	CPU       modules.CPU       `json:"cpu"`
+	RAM       modules.RAM       `json:"ram"`
+	Storage   []modules.Storage `json:"storage"`
+	Zram      modules.Zram      `json:"zram"`
+	Network   []modules.Network `json:"network"`
+	Logs      []modules.Log     `json:"logs"`
+	Processes []modules.Process `json:"processes"`
 }
 
 func sse(w http.ResponseWriter, r *http.Request) {
@@ -43,6 +44,7 @@ func sse(w http.ResponseWriter, r *http.Request) {
 			s.Zram, _ = modules.ZramUsage()
 			s.Network, _ = modules.NetworkUsage()
 			s.Logs, _ = modules.SystemLog(30)
+			s.Processes, _ = modules.Processes(10)
 			b, _ := json.Marshal(s)
 			w.Write([]byte("data: " + string(b) + "\n\n"))
 			fl.Flush()

@@ -19,14 +19,13 @@ func NetworkUsage() ([]Network, error) {
 		if i < 0 {
 			continue
 		}
-		name := strings.TrimSpace(line[:i])
 		f := strings.Fields(line[i+1:])
 		if len(f) < 9 {
 			continue
 		}
 		rx, _ := strconv.ParseUint(f[0], 10, 64)
 		tx, _ := strconv.ParseUint(f[8], 10, 64)
-		out = append(out, Network{Name: name, RxBytes: rx, TxBytes: tx})
+		out = append(out, Network{RxBytes: rx, TxBytes: tx})
 	}
 	return out, nil
 }

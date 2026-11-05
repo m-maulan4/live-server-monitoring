@@ -10,27 +10,29 @@ import (
 // ZramUsage menjumlahkan semua device zram*.
 func ZramUsage() (Zram, error) {
 	z := Zram{}
-	paths, err := filepath.Glob("/sys/block/zram*/mm_stat")
+	paths, err := filepath.Glob("/sys/block/zram*")
 	if err != nil || len(paths) == 0 {
 		return z, err // zram tidak ada/ter-disable
 	}
 	for _, p := range paths {
-		b, err := os.ReadFile(p)
+		// kapasitas device (byte), bukan dari mm_stat
+		if b, err := os.ReadFile(p + "/disksize"); err == nil {
+			n, _ := strconv.ParseUint(strings.TrimSpace(string(b)), 10, 64)
+			z.DiskSize += n
+		}
+		// mm_stat: 0 = orig_data_size, 1 = compr_data_size (byte)
+		b, err := os.ReadFile(p + "/mm_stat")
 		if err != nil {
 			continue
 		}
 		f := strings.Fields(string(b))
-		if len(f) < 4 {
+		if len(f) < 2 {
 			continue
 		}
-		d, _ := strconv.ParseUint(f[0], 10, 64)
-		o, _ := strconv.ParseUint(f[1], 10, 64)
-		c, _ := strconv.ParseUint(f[2], 10, 64)
-		m, _ := strconv.ParseUint(f[3], 10, 64)
-		z.DiskSize += d
+		o, _ := strconv.ParseUint(f[0], 10, 64)
+		c, _ := strconv.ParseUint(f[1], 10, 64)
 		z.Original += o
 		z.Compressed += c
-		z.MemUsedFree += m
 	}
 	return z, nil
 }

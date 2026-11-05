@@ -18,20 +18,17 @@ type Storage struct {
 	Path  string `json:"path"`
 	Total uint64 `json:"total"`
 	Used  uint64 `json:"used"`
-	Free  uint64 `json:"free"`
 }
 
 // Zram metrics dari /sys/block/zram0 (byte).
 type Zram struct {
-	DiskSize    uint64 `json:"disk_size"`
-	Original    uint64 `json:"original"`   // data sebelum kompresi
-	Compressed  uint64 `json:"compressed"` // data setelah kompresi
-	MemUsedFree uint64 `json:"mem_used_free"`
+	DiskSize   uint64 `json:"disk_size"`  // kapasitas device (byte)
+	Original   uint64 `json:"original"`   // orig_data_size: data sebelum kompresi
+	Compressed uint64 `json:"compressed"` // compr_data_size: data setelah kompresi
 }
 
 // Network metrics per interface dari /proc/net/dev (byte kumulatif sejak boot).
 type Network struct {
-	Name    string `json:"name"`
 	RxBytes uint64 `json:"rx_bytes"`
 	TxBytes uint64 `json:"tx_bytes"`
 }
@@ -40,7 +37,6 @@ type Network struct {
 type Server struct {
 	Hostname string  `json:"hostname"`
 	OS       string  `json:"os"`
-	Kernel   string  `json:"kernel"`
 	CPUModel string  `json:"cpu_model"`
 	Uptime   float64 `json:"uptime"` // detik sejak boot
 	Load1    float64 `json:"load1"`

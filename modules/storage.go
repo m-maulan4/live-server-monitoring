@@ -14,7 +14,7 @@ func StorageUsage(paths ...string) ([]Storage, error) {
 		}
 		total := st.Blocks * uint64(st.Bsize)
 		free := st.Bavail * uint64(st.Bsize)
-		out = append(out, Storage{Path: p, Total: total, Free: free, Used: total - free})
+		out = append(out, Storage{Path: p, Total: total, Used: total - free})
 	}
 	return out, nil
 }

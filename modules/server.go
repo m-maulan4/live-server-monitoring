@@ -14,7 +14,6 @@ func ServerInfo() (Server, error) {
 	}
 	var un syscall.Utsname
 	if err := syscall.Uname(&un); err == nil {
-		s.Kernel = charsToString(un.Release[:])
 		if s.OS == "" {
 			s.OS = charsToString(un.Sysname[:])
 		}
