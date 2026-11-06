@@ -146,17 +146,16 @@
                 <div class="h-6 w-px bg-slate-800 hidden md:block"></div>
 
                 <!-- Badge status koneksi SSE (hijau = connected, amber = reconnect; JS yang ganti class) -->
-                <div id="ws-badge"
+                <div id="ws-badge" title="Latency SSE"
                     class="flex items-center gap-2 bg-emerald-950/40 border border-emerald-500/40 px-3 py-1.5 rounded-full glow-emerald">
                     <span class="relative flex h-2.5 w-2.5">
                         <!-- Titik berkedip (animasi pulse) -->
                         <span id="ws-ping-dot"
                             class="animate-pulse-fast absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                        <span id="ws-dot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                     </span>
-                    <!-- Teks status: JS set "SSE CONNECTED" / "SSE RECONNECT" -->
-                    <span id="ws-status-text" class="text-xs font-bold tracking-wider text-emerald-400 font-mono">SSE
-                        CONNECTED</span>
+                    <!-- Teks status: JS set latency ms / "SSE RECONNECT" -->
+                    <span id="ws-status-text" class="text-xs font-bold tracking-wider text-emerald-400 font-mono">latency: --ms</span>
                 </div>
             </div>
 
@@ -333,25 +332,32 @@
                 </div>
             </div>
 
-            <!-- CARD 6: Latency SSE (selisih waktu antar pesan; dihitung frontend dari gap kedatangan) -->
+            <!-- CARD 6: Total Traffic (akumulasi RX/TX byte sejak boot; bar proporsi RX:TX) -->
             <div
-                class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden group hover:border-rose-500/40 transition">
+                class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden group hover:border-amber-500/40 transition">
                 <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <i data-lucide="wifi" class="w-4 h-4 text-rose-400"></i> Latency SSE
+                        <i data-lucide="download" class="w-4 h-4 text-amber-400"></i> Total Traffic
                     </span>
                 </div>
                 <div class="mt-1">
-                    <div class="flex items-baseline justify-between">
-                        <span id="kpi-latency-val"
-                            class="text-3xl font-extrabold font-mono text-rose-400 tracking-tight">--ms</span>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <div class="text-[10px] uppercase tracking-widest text-slate-500">RX Total</div>
+                            <div id="kpi-rx-total" class="text-xl font-bold font-mono text-amber-400 mt-0.5">0 B</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] uppercase tracking-widest text-slate-500">TX Total</div>
+                            <div id="kpi-tx-total" class="text-xl font-bold font-mono text-orange-400 mt-0.5">0 B</div>
+                        </div>
                     </div>
-                    <div class="text-[11px] text-slate-400 font-mono mt-1">selisih waktu antar pesan</div>
+                    <div class="text-[10px] text-slate-500 font-mono mt-1">akumulasi sejak boot</div>
                 </div>
-                <div class="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
-                    <div id="kpi-latency-bar"
-                        class="bg-gradient-to-r from-rose-500 to-amber-400 h-full rounded-full transition-all duration-300"
-                        style="width: 0%"></div>
+                <div class="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden flex">
+                    <div id="kpi-rx-total-bar" class="bg-amber-400 h-full transition-all duration-300" style="width: 50%">
+                    </div>
+                    <div id="kpi-tx-total-bar" class="bg-orange-400 h-full transition-all duration-300"
+                        style="width: 50%"></div>
                 </div>
             </div>
 

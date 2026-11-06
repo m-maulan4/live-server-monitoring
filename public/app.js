@@ -29,6 +29,20 @@ const fmtUpt = s => {
 };
 const stripAnsi = s => (s || '').replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
 
+// warna badge latency: ok <1.5s, warn <3s, bad >3s (satu tick normal ~1s)
+function setLatencyBadge(ms) {
+    const lvl = ms < 1500 ? 'ok' : ms < 3000 ? 'warn' : 'bad';
+    const c = {
+        ok: { bg: 'bg-emerald-950/40 border-emerald-500/40', text: 'text-emerald-400', ping: 'bg-emerald-400', dot: 'bg-emerald-500', glow: 'glow-emerald' },
+        warn: { bg: 'bg-amber-950/40 border-amber-500/40', text: 'text-amber-400', ping: 'bg-amber-400', dot: 'bg-amber-500', glow: '' },
+        bad: { bg: 'bg-rose-950/40 border-rose-500/40', text: 'text-rose-400', ping: 'bg-rose-400', dot: 'bg-rose-500', glow: '' },
+    }[lvl];
+    $('ws-badge').className = (`flex items-center gap-2 border ${c.bg} px-3 py-1.5 rounded-full ${c.glow}`).replace(/\s+/g, ' ').trim();
+    $('ws-status-text').className = `text-xs font-bold tracking-wider font-mono ${c.text}`;
+    $('ws-ping-dot').className = `animate-pulse-fast absolute inline-flex h-full w-full rounded-full ${c.ping} opacity-75`;
+    $('ws-dot').className = `relative inline-flex rounded-full h-2.5 w-2.5 ${c.dot}`;
+}
+
 // ---- clock ----
 function updateClock() {
     const now = new Date();
@@ -153,6 +167,13 @@ function onData(d) {
     $('kpi-net-rx-bar').style.width = (netMbps > 0 ? rxMbps / netMbps * 100 : 0) + '%';
     $('kpi-net-tx-bar').style.width = (netMbps > 0 ? txMbps / netMbps * 100 : 0) + '%';
 
+    // total traffic (akumulasi byte sejak boot)
+    $('kpi-rx-total').textContent = fmtB(totalRx);
+    $('kpi-tx-total').textContent = fmtB(totalTx);
+    const totBytes = totalRx + totalTx;
+    $('kpi-rx-total-bar').style.width = (totBytes > 0 ? totalRx / totBytes * 100 : 50) + '%';
+    $('kpi-tx-total-bar').style.width = (totBytes > 0 ? totalTx / totBytes * 100 : 50) + '%';
+
     // system info widget
     $('info-hostname').textContent = d.server.hostname + ' · ' + (d.server.os || '-');
     $('info-cpumodel').textContent = d.server.cpu_model || '-';
@@ -163,11 +184,11 @@ function onData(d) {
     // avg stats
     $('buffer-count-badge').textContent = `${fifoLabels.length} / ${MAX_BUFFER_POINTS} pts`;
 
-    // latency = message gap (approx)
-    const latency = lastSample.t - (window._prevArrive || now);
+    // latency = message gap (approx) → tampil di badge header
+    const latency = now - (window._prevArrive || now);
     window._prevArrive = now;
-    $('kpi-latency-val').textContent = Math.round(latency) + 'ms';
-    $('kpi-latency-bar').style.width = Math.min(100, latency / 10) + '%';
+    $('ws-status-text').textContent = 'latency: ' + Math.round(latency) + 'ms';
+    setLatencyBadge(latency);
 
     // process list (top 10 by RAM)
     renderProcesses(d.processes || []);
@@ -231,11 +252,11 @@ es.onmessage = e => {
 };
 es.onerror = () => {
     $('ws-status-text').textContent = 'SSE RECONNECT';
-    $('ws-badge').className = 'flex items-center gap-2 bg-amber-950/40 border border-amber-500/40 px-3 py-1.5 rounded-full';
+    setLatencyBadge(2000);
 };
 es.onopen = () => {
-    $('ws-status-text').textContent = 'SSE CONNECTED';
-    $('ws-badge').className = 'flex items-center gap-2 bg-emerald-950/40 border border-emerald-500/40 px-3 py-1.5 rounded-full glow-emerald';
+    $('ws-status-text').textContent = 'latency: --ms';
+    setLatencyBadge(0);
 };
 
 // ---- controls ----
