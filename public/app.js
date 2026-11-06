@@ -156,7 +156,7 @@ function onData(d) {
     // system info widget
     $('info-hostname').textContent = d.server.hostname + ' · ' + (d.server.os || '-');
     $('info-cpumodel').textContent = d.server.cpu_model || '-';
-    $('info-cores').textContent = cores + ' cores';
+    $('info-cores').textContent = (d.server.cores || 0) + ' cores · ' + (d.server.threads || 0) + ' threads';
     $('info-uptime').textContent = fmtUpt(d.server.uptime || 0);
     $('info-load').textContent = [d.server.load1, d.server.load5, d.server.load15].map(v => (v || 0).toFixed(2)).join(' / ');
 
@@ -205,8 +205,14 @@ function appendLogs(logs) {
         const badge = l.priority === '3' ? '<span class="text-rose-400 font-bold">[ERR]</span>'
             : l.priority === '4' ? '<span class="text-yellow-300 font-bold">[WARN]</span>'
                 : '<span class="text-emerald-400 font-bold">[SYS]</span>';
-        div.className = 'flex items-start gap-2 text-slate-300 hover:bg-slate-900/60 p-0.5 rounded';
-        div.innerHTML = `<span class="text-slate-500 shrink-0">${t}</span>${badge}<span class="text-slate-400 shrink-0">${l.unit || ''}</span><span class="break-all">${stripAnsi(l.message)}</span>`;
+        div.className = 'hover:bg-slate-900/60 p-1.5 rounded border-b border-slate-800/50';
+        div.innerHTML = `
+            <div class="flex items-center gap-2 text-[10px] mb-0.5">
+                <span class="text-slate-500 shrink-0 font-mono">${t}</span>${badge}
+                <span class="text-slate-400 truncate font-mono">${l.unit || ''}</span>
+            </div>
+            <div class="text-slate-200 break-all leading-relaxed">${stripAnsi(l.message)}</div>
+        `;
         body.appendChild(div);
     });
     while (body.children.length > 50) body.removeChild(body.firstChild);

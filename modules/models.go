@@ -33,12 +33,14 @@ type Network struct {
 	TxBytes uint64 `json:"tx_bytes"`
 }
 
-// Server info statis (hostname, OS, kernel) + uptime/load.
+// Server info statis (hostname, OS, CPU topology) + uptime/load.
 type Server struct {
 	Hostname string  `json:"hostname"`
 	OS       string  `json:"os"`
 	CPUModel string  `json:"cpu_model"`
-	Uptime   float64 `json:"uptime"` // detik sejak boot
+	Cores    int     `json:"cores"`   // core fisik
+	Threads  int     `json:"threads"` // thread logika (termasuk hyperthread)
+	Uptime   float64 `json:"uptime"`  // detik sejak boot
 	Load1    float64 `json:"load1"`
 	Load5    float64 `json:"load5"`
 	Load15   float64 `json:"load15"`

@@ -125,7 +125,7 @@
     <header class="sticky top-0 z-40 bg-[#0b1120]/90 backdrop-blur-md border-b border-slate-800/80 px-4 lg:px-8 py-3">
         <div class="max-w-[1920px] mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
             <!-- Brand (ikon radio + judul) + subjudul -->
-            <div class="flex items-center justify-between w-full md:w-auto gap-4">
+            <div class="flex items-center justify-between w-full md:w-auto gap-4 flex-wrap">
                 <div class="flex items-center gap-3">
                     <!-- Logo bulat gradient (ubah warna emerald/cyan di sini) -->
                     <div
@@ -135,7 +135,9 @@
                     <div>
                         <!-- Judul brand -->
                         <div class="flex items-center gap-2">
-                            <span class="font-extrabold text-xl tracking-wider text-white uppercase">Live Server
+                            <span
+                                class="font-extrabold text-lg sm:text-xl tracking-wider text-white uppercase leading-tight">Live
+                                Server
                                 Monitoring</span>
                         </div>
                     </div>
@@ -258,6 +260,7 @@
                                 class="text-3xl font-extrabold font-mono text-white tracking-tight">0 B / 0 B</span>
                         </div>
                         <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5">
+                            <span>compress ratio:</span>
                             <span id="kpi-zram-ratio" class="text-fuchsia-400 font-mono font-bold">0x</span>
                         </div>
                     </div>
@@ -354,13 +357,13 @@
 
             <!-- CARD 7: SYSTEM INFO (hostname/uptime, os/kernel, cpu/cores, load avg) -->
             <div
-                class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden group hover:border-cyan-500/40 transition xl:col-span-2">
+                class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden group hover:border-cyan-500/40 transition sm:col-span-2 md:col-span-3 xl:col-span-2">
                 <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                         <i data-lucide="server" class="w-4 h-4 text-cyan-400"></i> SYSTEM INFO
                     </span>
                 </div>
-                <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-sm font-mono">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2 text-sm font-mono">
                     <div>
                         <div class="text-xs font-medium text-slate-500 uppercase tracking-widest">Hostname</div>
                         <div id="info-hostname" class="text-sm text-white font-bold truncate">-</div>
@@ -412,7 +415,7 @@
                 </div>
             </div>
 
-            <div class="w-full h-[340px] relative">
+            <div class="w-full h-[240px] sm:h-[300px] lg:h-[340px] relative">
                 <canvas id="liveFifoChart"></canvas>
             </div>
 
@@ -429,13 +432,13 @@
                         <div>
                             <h3 class="text-base font-bold text-white flex items-center gap-2">
                                 <i data-lucide="list" class="w-4 h-4 text-cyan-400"></i>
-                                Program Berjalan (Top 10)
+                                Program Berjalan
                             </h3>
                             <p class="text-xs text-slate-400">Proses teratas berdasar RAM, dibaca dari /proc</p>
                         </div>
                         <span
                             class="text-xs font-mono text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-lg border border-cyan-500/20 font-bold">TOP
-                            10 PROC</span>
+                            10</span>
                     </div>
 
                     <div class="overflow-x-auto overflow-y-auto h-[340px]">
@@ -455,9 +458,9 @@
                 </div>
 
                 <div
-                    class="pt-3 mt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                    class="pt-3 mt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 text-xs text-slate-400">
                     <span>Proses dibaca langsung dari /proc (RSS = resident memory)</span>
-                    <span class="font-mono text-emerald-400 flex items-center gap-1">
+                    <span class="font-mono text-emerald-400 flex items-center gap-1 whitespace-nowrap">
                         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> Real-time Sync Active
                     </span>
                 </div>
@@ -466,7 +469,8 @@
             <!-- KANAN: terminal syslog (log masuk via SSE; polos warna by priority, auto-scroll) -->
             <div
                 class="bg-slate-950 border border-slate-800/90 rounded-2xl p-4 flex flex-col justify-between shadow-2xl relative font-mono lg:h-[480px]">
-                <div class="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-3">
+                <div
+                    class="flex flex-wrap items-center justify-between gap-y-2 gap-x-3 border-b border-slate-800 pb-2.5 mb-3">
                     <div class="flex items-center gap-2">
                         <div class="flex gap-1.5">
                             <span class="w-3 h-3 rounded-full bg-rose-500/80 inline-block"></span>
@@ -474,7 +478,7 @@
                             <span class="w-3 h-3 rounded-full bg-emerald-500/80 inline-block"></span>
                         </div>
                         <span class="text-xs font-bold text-slate-300 ml-2 flex items-center gap-1.5">
-                            <i data-lucide="terminal" class="w-3.5 h-3.5 text-cyan-400"></i> syslog-feed.log
+                            <i data-lucide="terminal" class="w-3.5 h-3.5 text-cyan-400"></i> Terminal
                         </span>
                     </div>
                     <div class="flex items-center gap-2 text-[11px]">
@@ -503,8 +507,8 @@
 
     <!-- ================= FOOTER ================= -->
     <footer
-        class="mt-auto border-t border-slate-800/80 bg-slate-950/80 py-3 px-4 lg:px-8 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-        <div class="flex items-center gap-2 font-mono">
+        class="mt-auto border-t border-slate-800/80 bg-slate-950/80 py-3 px-4 lg:px-8 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
+        <div class="flex flex-wrap items-center justify-center sm:justify-start gap-x-2 gap-y-1 font-mono">
             <span class="text-cyan-400 font-bold uppercase">Live Server Monitoring</span>
             <span class="capitalize">&bull; created by Maulana and assisted by AI</span>
         </div>

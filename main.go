@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"time"
 
 	"statusserver/modules"
@@ -55,5 +56,9 @@ func sse(w http.ResponseWriter, r *http.Request) {
 func main() {
 	http.HandleFunc("/health", sse)
 	http.Handle("/", http.FileServer(http.Dir("public")))
-	http.ListenAndServe(":8000", nil)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	http.ListenAndServe(":"+port, nil)
 }

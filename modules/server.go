@@ -22,6 +22,7 @@ func ServerInfo() (Server, error) {
 		s.OS = v
 	}
 	s.CPUModel = cpuModel()
+	s.Cores, s.Threads = cpuTopology()
 	s.Uptime = firstNum("/proc/uptime")
 	if f := strings.Fields(readFile("/proc/loadavg")); len(f) >= 3 {
 		s.Load1, _ = strconv.ParseFloat(f[0], 64)
@@ -69,6 +70,45 @@ func cpuModel() string {
 		}
 	}
 	return ""
+}
+
+// cpuTopology: core fisik vs thread logika dari /proc/cpuinfo.
+// threads = jumlah entry processor; cores = unik physical id x cpu cores.
+// ponytail: VM/ARM tanpa physical id/cpu cores → cores = threads (tak bisa dibedakan).
+func cpuTopology() (cores, threads int) {
+	sockets := map[string]bool{}
+	coresPerSocket := 0
+	for _, line := range strings.Split(readFile("/proc/cpuinfo"), "\n") {
+		f := strings.SplitN(line, ":", 2)
+		if len(f) != 2 {
+			continue
+		}
+		k, v := strings.TrimSpace(f[0]), strings.TrimSpace(f[1])
+		switch k {
+		case "processor":
+			threads++
+		case "physical id":
+			sockets[v] = true
+		case "cpu cores":
+			if n, _ := strconv.Atoi(v); n > coresPerSocket {
+				coresPerSocket = n
+			}
+		}
+	}
+	if socketsN := len(sockets); socketsN > 0 && coresPerSocket > 0 {
+		cores = socketsN * coresPerSocket
+	} else if coresPerSocket > 0 {
+		cores = coresPerSocket
+	} else {
+		cores = threads
+	}
+	if threads == 0 {
+		threads = cores
+	}
+	if threads < cores {
+		cores = threads
+	}
+	return cores, threads
 }
 
 func charsToString(a []int8) string {
