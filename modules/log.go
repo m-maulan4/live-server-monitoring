@@ -1,6 +1,7 @@
 package modules
 
 import (
+	"context"
 	"encoding/json"
 	"os/exec"
 	"strconv"
@@ -12,6 +13,8 @@ var (
 	logMu     sync.Mutex
 	logCursor string // cursor journald entry terakhir yang sudah dikirim
 )
+
+const maxLogs = 50 // simpan 50 terbaru, yang lama dibuang
 
 // SystemLog: panggilan pertama kirim `n` entry terakhir, lalu hanya entry
 // BARU (via journalctl --after-cursor). Data lama tidak dikirim ulang.
@@ -25,7 +28,9 @@ func SystemLog(n int) ([]Log, error) {
 	} else {
 		args = append(args, "--after-cursor", logCursor)
 	}
-	out, err := exec.Command("journalctl", args...).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "journalctl", args...).Output()
 	if err != nil {
 		if logCursor != "" {
 			logCursor = "" // cursor basi (journald rotate) → full fetch berikutnya
@@ -48,6 +53,9 @@ func SystemLog(n int) ([]Log, error) {
 			Priority: strField(m["PRIORITY"]),
 			Message:  msgString(m["MESSAGE"]),
 		})
+	}
+	if len(logs) > maxLogs {
+		logs = logs[len(logs)-maxLogs:] // buang lama, simpan 50 terbaru
 	}
 	return logs, nil
 }

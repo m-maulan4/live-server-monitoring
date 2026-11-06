@@ -15,7 +15,8 @@ const sparkRamData = Array(10).fill(0);
 let mainChart = null, miniSparkCpu = null, miniSparkRam = null;
 
 // ---- helpers ----
-const $ = id => document.getElementById(id);
+const $cache = Object.create(null);
+const $ = id => (id in $cache ? $cache[id] : ($cache[id] = document.getElementById(id)));
 const fmtB = n => {
     if (n == null) return '0 B';
     const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0;
@@ -189,7 +190,6 @@ function onData(d) {
 
 function renderProcesses(procs) {
     const tbody = $('nodes-table-body');
-    tbody.innerHTML = '';
     if (!procs.length) {
         const tr = document.createElement('tr');
         const td = document.createElement('td');
@@ -197,9 +197,10 @@ function renderProcesses(procs) {
         td.className = 'py-2.5 px-3 text-slate-500';
         td.textContent = 'menunggu data proses…';
         tr.appendChild(td);
-        tbody.appendChild(tr);
+        tbody.replaceChildren(tr);
         return;
     }
+    const frag = document.createDocumentFragment();
     procs.forEach(p => {
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-slate-800/40 transition';
@@ -215,13 +216,15 @@ function renderProcesses(procs) {
             td.textContent = v;
             tr.appendChild(td);
         });
-        tbody.appendChild(tr);
+        frag.appendChild(tr);
     });
+    tbody.replaceChildren(frag);
 }
 
 function appendLogs(logs) {
     const body = $('terminal-body');
     $('term-packet-count').textContent = `${packetCounter} packets`;
+    const frag = document.createDocumentFragment();
     logs.forEach(l => {
         const t = (l.time || '').slice(11) || '--:--:--';
         const badge = l.priority === '3' ? ['[ERR]', 'text-rose-400']
@@ -252,8 +255,9 @@ function appendLogs(logs) {
 
         title.append(time, bad, unit);
         div.append(title, msg);
-        body.appendChild(div);
+        frag.appendChild(div);
     });
+    body.appendChild(frag);
     while (body.children.length > 100) body.removeChild(body.firstChild);
     if (autoScrollTerminal) body.scrollTop = body.scrollHeight;
 }
