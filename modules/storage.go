@@ -2,11 +2,12 @@ package modules
 
 import "syscall"
 
-func StorageUsage(paths ...string) ([]Storage, error) {
+// StorageUsage: agregat semua path (default "/"). Total+Used+pct dihitung di sini.
+func StorageUsage(paths ...string) (Storage, error) {
 	if len(paths) == 0 {
 		paths = []string{"/"} // ponytail: root saja; tambah mount list kalau perlu
 	}
-	var out []Storage
+	var agg Storage
 	for _, p := range paths {
 		var st syscall.Statfs_t
 		if err := syscall.Statfs(p, &st); err != nil {
@@ -14,7 +15,11 @@ func StorageUsage(paths ...string) ([]Storage, error) {
 		}
 		total := st.Blocks * uint64(st.Bsize)
 		free := st.Bavail * uint64(st.Bsize)
-		out = append(out, Storage{Path: p, Total: total, Used: total - free})
+		agg.Total += total
+		agg.Used += total - free
 	}
-	return out, nil
+	if agg.Total > 0 {
+		agg.Pct = float64(agg.Used) / float64(agg.Total) * 100
+	}
+	return agg, nil
 }

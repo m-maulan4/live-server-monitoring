@@ -146,7 +146,7 @@
                 <div class="h-6 w-px bg-slate-800 hidden md:block"></div>
 
                 <!-- Badge status koneksi SSE (hijau = connected, amber = reconnect; JS yang ganti class) -->
-                <div id="ws-badge" title="Latency SSE"
+                <div id="ws-badge" title="Interval pesan SSE"
                     class="flex items-center gap-2 bg-emerald-950/40 border border-emerald-500/40 px-3 py-1.5 rounded-full glow-emerald">
                     <span class="relative flex h-2.5 w-2.5">
                         <!-- Titik berkedip (animasi pulse) -->
@@ -154,8 +154,8 @@
                             class="animate-pulse-fast absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span id="ws-dot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                     </span>
-                    <!-- Teks status: JS set latency ms / "SSE RECONNECT" -->
-                    <span id="ws-status-text" class="text-xs font-bold tracking-wider text-emerald-400 font-mono">latency: --ms</span>
+                    <!-- Teks status: JS set interval ms / "SSE RECONNECT" -->
+                    <span id="ws-status-text" class="text-xs font-bold tracking-wider text-emerald-400 font-mono">interval: --ms</span>
                 </div>
             </div>
 
@@ -293,7 +293,6 @@
                         </div>
                     </div>
                 </div>
-                <div id="kpi-storage-mounts" class="text-[10px] text-slate-500 font-mono mt-2 truncate">mounts: -</div>
                 <div class="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
                     <div id="kpi-storage-bar"
                         class="bg-gradient-to-r from-sky-500 to-cyan-400 h-full rounded-full transition-all duration-300"

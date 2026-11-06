@@ -4,6 +4,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -13,26 +14,44 @@ type cpuTimes struct {
 	total uint64
 }
 
-// CPUUsage membaca /proc/stat dua kali (interval 1s) untuk hitung usage.
-// ponytail: poll per-call; kalau butuh presisi, pindah ke collector background.
+var (
+	cpuMu   sync.RWMutex
+	cpuStat = CPU{}
+)
+
+// InitCPU mulai kolektor background: sampling /proc/stat tiap 500ms,
+// hitung usage dari delta antar sample. Panggil sekali di main().
+// CPUUsage() lalu instan (baca cache), tanpa sleep di jalur request.
+func InitCPU() {
+	go func() {
+		var prev cpuTimes
+		for {
+			cur, err := readCpuTimes()
+			if err == nil {
+				var c CPU
+				c.Cores = cur.cores
+				if prev.total > 0 && cur.total > prev.total {
+					idle := cur.idle - prev.idle
+					total := cur.total - prev.total
+					if total > 0 {
+						c.Usage = (1 - float64(idle)/float64(total)) * 100
+					}
+				}
+				cpuMu.Lock()
+				cpuStat = c
+				cpuMu.Unlock()
+				prev = cur
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+	}()
+}
+
+// CPUUsage kembalikan cache CPU (instan).
 func CPUUsage() (CPU, error) {
-	c := CPU{}
-	stat1, err := readCpuTimes()
-	if err != nil {
-		return c, err
-	}
-	time.Sleep(1 * time.Second)
-	stat2, err := readCpuTimes()
-	if err != nil {
-		return c, err
-	}
-	c.Cores = stat2.cores
-	idle := stat2.idle - stat1.idle
-	total := stat2.total - stat1.total
-	if total > 0 {
-		c.Usage = (1 - float64(idle)/float64(total)) * 100
-	}
-	return c, nil
+	cpuMu.RLock()
+	defer cpuMu.RUnlock()
+	return cpuStat, nil
 }
 
 func readCpuTimes() (cpuTimes, error) {

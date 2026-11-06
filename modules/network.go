@@ -1,19 +1,30 @@
 package modules
 
 import (
+	"math"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
-// NetworkUsage membaca /proc/net/dev, jumlahkan rx/tx semua interface jadi total.
-// ponytail: kumulatif sejak boot (termasuk lo); untuk rate (byte/s) perlu delta sampling 2x seperti CPU.
-func NetworkUsage() ([]Network, error) {
+var (
+	netMu     sync.Mutex
+	netPrevRx uint64
+	netPrevTx uint64
+	netPrevT  time.Time
+)
+
+// NetworkUsage: total rx/tx kumulatif semua interface + rate (Mbps) via delta
+// antar panggilan. Rate dihitung server, bukan di FE.
+// ponytail: pertama kali dipanggil rate = 0 (belum ada sampel sebelumnya).
+func NetworkUsage() (Network, error) {
 	b, err := os.ReadFile("/proc/net/dev")
 	if err != nil {
-		return nil, err
+		return Network{}, err
 	}
-	var total Network
+	var rx, tx uint64
 	for _, line := range strings.Split(string(b), "\n") {
 		i := strings.Index(line, ":")
 		if i < 0 {
@@ -23,10 +34,26 @@ func NetworkUsage() ([]Network, error) {
 		if len(f) < 9 {
 			continue
 		}
-		rx, _ := strconv.ParseUint(f[0], 10, 64)
-		tx, _ := strconv.ParseUint(f[8], 10, 64)
-		total.RxBytes += rx
-		total.TxBytes += tx
+		r, _ := strconv.ParseUint(f[0], 10, 64)
+		t, _ := strconv.ParseUint(f[8], 10, 64)
+		rx += r
+		tx += t
 	}
-	return []Network{total}, nil
+
+	n := Network{RxBytes: rx, TxBytes: tx}
+
+	netMu.Lock()
+	now := time.Now()
+	if !netPrevT.IsZero() {
+		dt := now.Sub(netPrevT).Seconds()
+		if dt > 0 {
+			n.RxMbps = math.Max(0, float64(rx-netPrevRx)*8/dt/1e6)
+			n.TxMbps = math.Max(0, float64(tx-netPrevTx)*8/dt/1e6)
+			n.NetMbps = n.RxMbps + n.TxMbps
+		}
+	}
+	netPrevRx, netPrevTx, netPrevT = rx, tx, now
+	netMu.Unlock()
+
+	return n, nil
 }

@@ -8,29 +8,34 @@ type CPU struct {
 
 // RAM metrics dari /proc/meminfo (KB).
 type RAM struct {
-	Total     uint64 `json:"total"`
-	Available uint64 `json:"available"`
-	Used      uint64 `json:"used"` // Total - Available
+	Total     uint64  `json:"total"`
+	Available uint64  `json:"available"`
+	Used      uint64  `json:"used"` // Total - Available
+	Pct       float64 `json:"pct"`  // used/total*100
 }
 
-// Storage metrics dari statfs.
+// Storage metrics agregat (semua mount dijumlah).
 type Storage struct {
-	Path  string `json:"path"`
-	Total uint64 `json:"total"`
-	Used  uint64 `json:"used"`
+	Total uint64  `json:"total"`
+	Used  uint64  `json:"used"`
+	Pct   float64 `json:"pct"` // used/total*100
 }
 
-// Zram metrics dari /sys/block/zram0 (byte).
+// Zram metrics dari /sys/block/zram0 (byte). Ratio/pct sudah dihitung server.
 type Zram struct {
-	DiskSize   uint64 `json:"disk_size"`  // kapasitas device (byte)
-	Original   uint64 `json:"original"`   // orig_data_size: data sebelum kompresi
-	Compressed uint64 `json:"compressed"` // compr_data_size: data setelah kompresi
+	DiskSize   uint64  `json:"disk_size"`  // kapasitas device (byte)
+	Compressed uint64  `json:"compressed"` // compr_data_size: data setelah kompresi
+	Ratio      float64 `json:"ratio"`      // original/compressed
+	Pct        float64 `json:"pct"`        // compressed/original*100
 }
 
-// Network metrics per interface dari /proc/net/dev (byte kumulatif sejak boot).
+// Network metrics total semua interface + rate (byte/s -> Mbps dihitung server).
 type Network struct {
-	RxBytes uint64 `json:"rx_bytes"`
-	TxBytes uint64 `json:"tx_bytes"`
+	RxBytes uint64  `json:"rx_bytes"` // kumulatif rx sejak boot
+	TxBytes uint64  `json:"tx_bytes"` // kumulatif tx sejak boot
+	RxMbps  float64 `json:"rx_mbps"`  // rate rx
+	TxMbps  float64 `json:"tx_mbps"`  // rate tx
+	NetMbps float64 `json:"net_mbps"` // rx+tx
 }
 
 // Server info statis (hostname, OS, CPU topology) + uptime/load.

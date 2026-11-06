@@ -4,23 +4,43 @@ import (
 	"encoding/json"
 	"os/exec"
 	"strconv"
+	"sync"
 	"time"
 )
 
-// SystemLog mengambil n entry terakhir journalctl (semua: service + kernel +
-// app). Perlu systemd/journald aktif.
+var (
+	logMu     sync.Mutex
+	logCursor string // cursor journald entry terakhir yang sudah dikirim
+)
+
+// SystemLog: panggilan pertama kirim `n` entry terakhir, lalu hanya entry
+// BARU (via journalctl --after-cursor). Data lama tidak dikirim ulang.
 func SystemLog(n int) ([]Log, error) {
-	out, err := exec.Command(
-		"journalctl", "-n", strconv.Itoa(n), "-o", "json", "--no-pager",
-	).Output()
+	logMu.Lock()
+	defer logMu.Unlock()
+
+	args := []string{"-o", "json", "--no-pager"}
+	if logCursor == "" {
+		args = append(args, "-n", strconv.Itoa(n))
+	} else {
+		args = append(args, "--after-cursor", logCursor)
+	}
+	out, err := exec.Command("journalctl", args...).Output()
 	if err != nil {
+		if logCursor != "" {
+			logCursor = "" // cursor basi (journald rotate) → full fetch berikutnya
+		}
 		return nil, err
 	}
+
 	var logs []Log
 	for _, line := range splitLines(string(out)) {
 		var m map[string]json.RawMessage
 		if json.Unmarshal([]byte(line), &m) != nil {
 			continue
+		}
+		if c := strField(m["__CURSOR"]); c != "" {
+			logCursor = c
 		}
 		logs = append(logs, Log{
 			Time:     tsString(m["__REALTIME_TIMESTAMP"]),

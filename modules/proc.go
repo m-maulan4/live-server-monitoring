@@ -31,9 +31,8 @@ var (
 )
 
 // Processes membaca /proc dan mengembalikan `top` proses teratas by RAM (RSS).
-// CPU% per proses dihitung dari delta utime+stime antar panggilan; panggilan pertama selalu 0.
-// ponytail: baca /proc semua PID tiap tick (O(n) file open). Cukup untuk dashboard;
-// kalau PID ribuan dan tick < 1s, pindah ke collector background + cache.
+// CPU% per proses dari delta utime+stime antar panggilan; panggilan pertama selalu 0.
+// Satu baca /proc/<pid>/stat per PID sudah mencakup nama+RSS+utime+stime.
 func Processes(top int) ([]Process, error) {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
@@ -56,9 +55,7 @@ func Processes(top int) ([]Process, error) {
 		if err != nil {
 			continue
 		}
-		name := procName(pid)
-		rss := procRSS(pid)
-		utime, stime, ok := procTimes(pid)
+		name, rss, utime, stime, ok := procStat(pid)
 		if !ok {
 			continue
 		}
@@ -97,46 +94,28 @@ func Processes(top int) ([]Process, error) {
 	return out, nil
 }
 
-func procName(pid int) string {
-	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/comm")
-	if err != nil {
-		return "?"
-	}
-	return strings.TrimSpace(string(b))
-}
-
-func procRSS(pid int) uint64 {
-	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/status")
-	if err != nil {
-		return 0
-	}
-	for _, line := range strings.Split(string(b), "\n") {
-		f := strings.Fields(line)
-		if len(f) >= 2 && f[0] == "VmRSS:" {
-			kb, _ := strconv.ParseUint(f[1], 10, 64)
-			return kb * 1024
-		}
-	}
-	return 0
-}
-
-func procTimes(pid int) (utime, stime uint64, ok bool) {
+// procStat: satu baca /proc/<pid>/stat -> nama (comm), RSS (field 24, page),
+// utime (14) + stime (15).
+func procStat(pid int) (name string, rss, utime, stime uint64, ok bool) {
 	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
 	if err != nil {
-		return 0, 0, false
+		return "", 0, 0, 0, false
 	}
 	s := string(b)
-	i := strings.LastIndexByte(s, ')')
-	if i < 0 || i+2 >= len(s) {
-		return 0, 0, false
+	lp := strings.IndexByte(s, '(')
+	rp := strings.LastIndexByte(s, ')')
+	if lp < 0 || rp < lp+1 || rp+2 >= len(s) {
+		return "", 0, 0, 0, false
 	}
-	// setelah ")pid(...)" -> fields mulai dari state (field 3).
-	// field 14 = utime (rest[11]), field 15 = stime (rest[12]).
-	rest := strings.Fields(s[i+2:])
-	if len(rest) <= 12 {
-		return 0, 0, false
+	name = s[lp+1 : rp]
+	// setelah ")..." field dimulai dari state (field 3) -> rest[0].
+	// utime = field 14 = rest[11], stime = 15 = rest[12], rss = 24 = rest[21].
+	rest := strings.Fields(s[rp+2:])
+	if len(rest) <= 21 {
+		return name, 0, 0, 0, false
 	}
 	utime, _ = strconv.ParseUint(rest[11], 10, 64)
 	stime, _ = strconv.ParseUint(rest[12], 10, 64)
-	return utime, stime, true
+	pages, _ := strconv.ParseUint(rest[21], 10, 64)
+	return name, pages * uint64(os.Getpagesize()), utime, stime, true
 }

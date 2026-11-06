@@ -1,13 +1,12 @@
 // SERVMON - Live Metrics (SSE)
 // lucide optional — kalau CDN gagal load, ikon hilang tapi dashboard tetap jalan
-if (window.lucide) { try { lucide.createIcons(); } catch (_) {} }
+if (window.lucide) { try { lucide.createIcons(); } catch (_) { } }
 
 // ---- state ----
 const MAX_BUFFER_POINTS = 30;
 let isStreaming = true;
 let packetCounter = 0;
 let autoScrollTerminal = true;
-let lastSample = null;
 
 const fifoLabels = [], fifoCpuData = [], fifoRamData = [], fifoNetData = [];
 const sparkCpuData = Array(10).fill(0);
@@ -29,8 +28,8 @@ const fmtUpt = s => {
 };
 const stripAnsi = s => (s || '').replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
 
-// warna badge latency: ok <1.5s, warn <3s, bad >3s (satu tick normal ~1s)
-function setLatencyBadge(ms) {
+// warna badge interval: ok <1.5s, warn <3s, bad >3s (satu tick normal ~1s)
+function setIntervalBadge(ms) {
     const lvl = ms < 1500 ? 'ok' : ms < 3000 ? 'warn' : 'bad';
     const c = {
         ok: { bg: 'bg-emerald-950/40 border-emerald-500/40', text: 'text-emerald-400', ping: 'bg-emerald-400', dot: 'bg-emerald-500', glow: 'glow-emerald' },
@@ -98,21 +97,15 @@ function onData(d) {
 
     const cpu = d.cpu.usage || 0;
     const cores = d.cpu.cores || 0;
-    const ramPct = d.ram.total ? (d.ram.used / d.ram.total * 100) : 0;
+    const ramPct = d.ram.pct || 0;
 
-    // network rate (delta cumulative bytes / dt), excludes first sample
-    let netMbps = 0, rxMbps = 0, txMbps = 0;
-    const totalRx = (d.network || []).reduce((a, n) => a + (n.rx_bytes || 0), 0);
-    const totalTx = (d.network || []).reduce((a, n) => a + (n.tx_bytes || 0), 0);
-    if (lastSample) {
-        const dt = (now - lastSample.t) / 1000;
-        if (dt > 0) {
-            rxMbps = Math.max(0, (totalRx - lastSample.rx) * 8 / dt / 1e6);
-            txMbps = Math.max(0, (totalTx - lastSample.tx) * 8 / dt / 1e6);
-            netMbps = rxMbps + txMbps;
-        }
-    }
-    lastSample = { t: now, rx: totalRx, tx: totalTx };
+    // semua rate/agregat sudah dihitung server; FE hanya tampil
+    const net = d.network || {};
+    const rxMbps = net.rx_mbps || 0;
+    const txMbps = net.tx_mbps || 0;
+    const netMbps = net.net_mbps || 0;
+    const totalRx = net.rx_bytes || 0;
+    const totalTx = net.tx_bytes || 0;
 
     // FIFO
     fifoLabels.push(timeTag); fifoCpuData.push(cpu); fifoRamData.push(ramPct); fifoNetData.push(Math.min(100, netMbps));
@@ -141,24 +134,21 @@ function onData(d) {
     $('kpi-ram-avail').textContent = 'Available: ' + fmtB(d.ram.available);
     $('kpi-ram-bar').style.width = ramPct + '%';
 
-    // storage (agregat semua mount)
-    const st = d.storage || [];
-    const stUsed = st.reduce((a, s) => a + (s.used || 0), 0);
-    const stTotal = st.reduce((a, s) => a + (s.total || 0), 0);
-    const stPct = stTotal ? stUsed / stTotal * 100 : 0;
+    // storage (agregat sudah dihitung server)
+    const st = d.storage || {};
+    const stUsed = st.used || 0;
+    const stTotal = st.total || 0;
+    const stPct = st.pct || 0;
     $('kpi-storage-gb').textContent = (stUsed / 1e9).toFixed(1);
     $('kpi-storage-total').textContent = 'Total: ' + fmtB(stTotal);
     $('kpi-storage-pct').textContent = stPct.toFixed(0) + '% Used';
     $('kpi-storage-bar').style.width = stPct + '%';
-    $('kpi-storage-mounts').textContent = 'mounts: ' + st.map(s => s.path).join(', ');
 
-    // zram
+    // zram (ratio/pct sudah dihitung server)
     const zram = d.zram || {};
-    const ratio = (zram.compressed && zram.original) ? (zram.original / zram.compressed) : 0;
     $('kpi-zram-comp').textContent = fmtB(zram.compressed) + ' / ' + fmtB(zram.disk_size);
-    $('kpi-zram-ratio').textContent = (ratio ? ratio.toFixed(1) : '0') + 'x';
-    // bar = % data terkompresi (compressed/original)
-    $('kpi-zram-bar').style.width = (zram.original ? Math.min(100, zram.compressed / zram.original * 100) : 0) + '%';
+    $('kpi-zram-ratio').textContent = ((zram.ratio || 0).toFixed(1)) + 'x';
+    $('kpi-zram-bar').style.width = (zram.pct || 0) + '%';
 
     $('kpi-net-total').textContent = netMbps.toFixed(1);
     $('kpi-net-rx').textContent = rxMbps.toFixed(1) + ' Mbps';
@@ -184,11 +174,11 @@ function onData(d) {
     // avg stats
     $('buffer-count-badge').textContent = `${fifoLabels.length} / ${MAX_BUFFER_POINTS} pts`;
 
-    // latency = message gap (approx) → tampil di badge header
-    const latency = now - (window._prevArrive || now);
+    // interval = gap kedatangan pesan SSE → tampil di badge header
+    const interval = now - (window._prevArrive || now);
     window._prevArrive = now;
-    $('ws-status-text').textContent = 'latency: ' + Math.round(latency) + 'ms';
-    setLatencyBadge(latency);
+    $('ws-status-text').textContent = 'interval: ' + Math.round(interval) + 'ms';
+    setIntervalBadge(interval);
 
     // process list (top 10 by RAM)
     renderProcesses(d.processes || []);
@@ -201,18 +191,30 @@ function renderProcesses(procs) {
     const tbody = $('nodes-table-body');
     tbody.innerHTML = '';
     if (!procs.length) {
-        tbody.innerHTML = '<tr><td colspan="4" class="py-2.5 px-3 text-slate-500">menunggu data proses…</td></tr>';
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 4;
+        td.className = 'py-2.5 px-3 text-slate-500';
+        td.textContent = 'menunggu data proses…';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
         return;
     }
     procs.forEach(p => {
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-slate-800/40 transition';
-        tr.innerHTML = `
-            <td class="py-2.5 px-3 text-slate-500">${p.pid}</td>
-            <td class="py-2.5 px-3 font-bold text-slate-200">${p.name}</td>
-            <td class="py-2.5 px-3 text-right text-cyan-400">${p.cpu.toFixed(1)}%</td>
-            <td class="py-2.5 px-3 text-right text-violet-400">${fmtB(p.ram)}</td>
-        `;
+        const cells = [
+            ['py-2.5 px-3 text-slate-500', p.pid],
+            ['py-2.5 px-3 font-bold text-slate-200', p.name],
+            ['py-2.5 px-3 text-right text-cyan-400', p.cpu.toFixed(1) + '%'],
+            ['py-2.5 px-3 text-right text-violet-400', fmtB(p.ram)],
+        ];
+        cells.forEach(([c, v]) => {
+            const td = document.createElement('td');
+            td.className = c;
+            td.textContent = v;
+            tr.appendChild(td);
+        });
         tbody.appendChild(tr);
     });
 }
@@ -221,22 +223,38 @@ function appendLogs(logs) {
     const body = $('terminal-body');
     $('term-packet-count').textContent = `${packetCounter} packets`;
     logs.forEach(l => {
-        const div = document.createElement('div');
         const t = (l.time || '').slice(11) || '--:--:--';
-        const badge = l.priority === '3' ? '<span class="text-rose-400 font-bold">[ERR]</span>'
-            : l.priority === '4' ? '<span class="text-yellow-300 font-bold">[WARN]</span>'
-                : '<span class="text-emerald-400 font-bold">[SYS]</span>';
+        const badge = l.priority === '3' ? ['[ERR]', 'text-rose-400']
+            : l.priority === '4' ? ['[WARN]', 'text-yellow-300']
+                : ['[SYS]', 'text-emerald-400'];
+
+        const div = document.createElement('div');
         div.className = 'hover:bg-slate-900/60 p-1.5 rounded border-b border-slate-800/50';
-        div.innerHTML = `
-            <div class="flex items-center gap-2 text-[10px] mb-0.5">
-                <span class="text-slate-500 shrink-0 font-mono">${t}</span>${badge}
-                <span class="text-slate-400 truncate font-mono">${l.unit || ''}</span>
-            </div>
-            <div class="text-slate-200 break-all leading-relaxed">${stripAnsi(l.message)}</div>
-        `;
+
+        const title = document.createElement('div');
+        title.className = 'flex items-center gap-2 text-[10px] mb-0.5';
+
+        const time = document.createElement('span');
+        time.className = 'text-slate-500 shrink-0 font-mono';
+        time.textContent = t;
+
+        const bad = document.createElement('span');
+        bad.className = badge[1] + ' font-bold';
+        bad.textContent = badge[0];
+
+        const unit = document.createElement('span');
+        unit.className = 'text-slate-400 truncate font-mono';
+        unit.textContent = l.unit || '';
+
+        const msg = document.createElement('div');
+        msg.className = 'text-slate-200 break-all leading-relaxed';
+        msg.textContent = stripAnsi(l.message);
+
+        title.append(time, bad, unit);
+        div.append(title, msg);
         body.appendChild(div);
     });
-    while (body.children.length > 50) body.removeChild(body.firstChild);
+    while (body.children.length > 100) body.removeChild(body.firstChild);
     if (autoScrollTerminal) body.scrollTop = body.scrollHeight;
 }
 
@@ -252,11 +270,11 @@ es.onmessage = e => {
 };
 es.onerror = () => {
     $('ws-status-text').textContent = 'SSE RECONNECT';
-    setLatencyBadge(2000);
+    setIntervalBadge(2000);
 };
 es.onopen = () => {
-    $('ws-status-text').textContent = 'latency: --ms';
-    setLatencyBadge(0);
+    $('ws-status-text').textContent = 'interval: --ms';
+    setIntervalBadge(0);
 };
 
 // ---- controls ----

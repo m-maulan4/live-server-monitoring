@@ -4,25 +4,45 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 )
 
-func ServerInfo() (Server, error) {
-	s := Server{}
+// Bagian statis server (tak berubah seumur hidup proses) dibaca sekali.
+var (
+	staticOnce   sync.Once
+	hostname     string
+	osName       string
+	cpuModelName string
+	coresNum     int
+	threadsNum   int
+)
+
+func initStatic() {
 	if h, err := os.Hostname(); err == nil {
-		s.Hostname = h
-	}
-	var un syscall.Utsname
-	if err := syscall.Uname(&un); err == nil {
-		if s.OS == "" {
-			s.OS = charsToString(un.Sysname[:])
-		}
+		hostname = h
 	}
 	if v := osRelease("PRETTY_NAME"); v != "" {
-		s.OS = v
+		osName = v
+	} else {
+		var un syscall.Utsname
+		if syscall.Uname(&un) == nil {
+			osName = charsToString(un.Sysname[:])
+		}
 	}
-	s.CPUModel = cpuModel()
-	s.Cores, s.Threads = cpuTopology()
+	cpuModelName, coresNum, threadsNum = parseCPUInfo(readFile("/proc/cpuinfo"))
+}
+
+// ServerInfo: statis di-cache (sync.Once), dinamis (uptime/load) per panggilan.
+func ServerInfo() (Server, error) {
+	staticOnce.Do(initStatic)
+	s := Server{
+		Hostname: hostname,
+		OS:       osName,
+		CPUModel: cpuModelName,
+		Cores:    coresNum,
+		Threads:  threadsNum,
+	}
 	s.Uptime = firstNum("/proc/uptime")
 	if f := strings.Fields(readFile("/proc/loadavg")); len(f) >= 3 {
 		s.Load1, _ = strconv.ParseFloat(f[0], 64)
@@ -58,33 +78,22 @@ func osRelease(key string) string {
 	return ""
 }
 
-func cpuModel() string {
-	for _, line := range strings.Split(readFile("/proc/cpuinfo"), "\n") {
-		f := strings.SplitN(line, ":", 2)
-		if len(f) != 2 {
-			continue
-		}
-		switch strings.TrimSpace(f[0]) {
-		case "model name", "Hardware", "Model":
-			return strings.TrimSpace(f[1])
-		}
-	}
-	return ""
-}
-
-// cpuTopology: core fisik vs thread logika dari /proc/cpuinfo.
-// threads = jumlah entry processor; cores = unik physical id x cpu cores.
+// parseCPUInfo: satu pass /proc/cpuinfo -> model + core fisik + thread logika.
 // ponytail: VM/ARM tanpa physical id/cpu cores → cores = threads (tak bisa dibedakan).
-func cpuTopology() (cores, threads int) {
+func parseCPUInfo(raw string) (model string, cores, threads int) {
 	sockets := map[string]bool{}
 	coresPerSocket := 0
-	for _, line := range strings.Split(readFile("/proc/cpuinfo"), "\n") {
+	for _, line := range strings.Split(raw, "\n") {
 		f := strings.SplitN(line, ":", 2)
 		if len(f) != 2 {
 			continue
 		}
 		k, v := strings.TrimSpace(f[0]), strings.TrimSpace(f[1])
 		switch k {
+		case "model name", "Hardware", "Model":
+			if model == "" {
+				model = v
+			}
 		case "processor":
 			threads++
 		case "physical id":
@@ -95,8 +104,8 @@ func cpuTopology() (cores, threads int) {
 			}
 		}
 	}
-	if socketsN := len(sockets); socketsN > 0 && coresPerSocket > 0 {
-		cores = socketsN * coresPerSocket
+	if n := len(sockets); n > 0 && coresPerSocket > 0 {
+		cores = n * coresPerSocket
 	} else if coresPerSocket > 0 {
 		cores = coresPerSocket
 	} else {
@@ -108,7 +117,7 @@ func cpuTopology() (cores, threads int) {
 	if threads < cores {
 		cores = threads
 	}
-	return cores, threads
+	return model, cores, threads
 }
 
 func charsToString(a []int8) string {

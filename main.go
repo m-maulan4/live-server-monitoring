@@ -13,9 +13,9 @@ type snapshot struct {
 	Server    modules.Server    `json:"server"`
 	CPU       modules.CPU       `json:"cpu"`
 	RAM       modules.RAM       `json:"ram"`
-	Storage   []modules.Storage `json:"storage"`
+	Storage   modules.Storage   `json:"storage"`
 	Zram      modules.Zram      `json:"zram"`
-	Network   []modules.Network `json:"network"`
+	Network   modules.Network   `json:"network"`
 	Logs      []modules.Log     `json:"logs"`
 	Processes []modules.Process `json:"processes"`
 }
@@ -27,8 +27,9 @@ func sse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-cache, no-transform")
 	w.Header().Set("Connection", "keep-alive")
+	fl.Flush() // dorong header segera; Cloudflare butuh flush-per-event (bukan buffering)
 
 	t := time.NewTicker(1 * time.Second)
 	defer t.Stop()
@@ -44,7 +45,7 @@ func sse(w http.ResponseWriter, r *http.Request) {
 			s.Storage, _ = modules.StorageUsage()
 			s.Zram, _ = modules.ZramUsage()
 			s.Network, _ = modules.NetworkUsage()
-			s.Logs, _ = modules.SystemLog(30)
+			s.Logs, _ = modules.SystemLog(100)
 			s.Processes, _ = modules.Processes(10)
 			b, _ := json.Marshal(s)
 			w.Write([]byte("data: " + string(b) + "\n\n"))
@@ -54,6 +55,7 @@ func sse(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	modules.InitCPU()
 	http.HandleFunc("/health", sse)
 	http.Handle("/", http.FileServer(http.Dir("public")))
 	port := os.Getenv("PORT")

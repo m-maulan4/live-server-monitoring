@@ -21,5 +21,10 @@ func RAMUsage() (RAM, error) {
 		return 0
 	}
 	total, avail := get("MemTotal"), get("MemAvailable")
-	return RAM{Total: total, Available: avail, Used: total - avail}, nil
+	used := total - avail
+	pct := 0.0
+	if total > 0 {
+		pct = float64(used) / float64(total) * 100
+	}
+	return RAM{Total: total, Available: avail, Used: used, Pct: pct}, nil
 }
