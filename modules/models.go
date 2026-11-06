@@ -21,12 +21,13 @@ type Storage struct {
 	Pct   float64 `json:"pct"` // used/total*100
 }
 
-// Zram metrics dari /sys/block/zram0 (byte). Ratio/pct sudah dihitung server.
+// Zram metrics (byte). Used dari /proc/meminfo (cocok free -h), compressed dari mm_stat.
 type Zram struct {
 	DiskSize   uint64  `json:"disk_size"`  // kapasitas device (byte)
+	Used       uint64  `json:"used"`       // SwapTotal - SwapFree, cocok free -h
 	Compressed uint64  `json:"compressed"` // compr_data_size: data setelah kompresi
-	Ratio      float64 `json:"ratio"`      // original/compressed
-	Pct        float64 `json:"pct"`        // compressed/original*100
+	Ratio      float64 `json:"ratio"`      // compressed/original*100 (% dari ukuran asli)
+	Pct        float64 `json:"pct"`        // used/disk_size*100 (fill%)
 }
 
 // Network metrics total semua interface + rate (byte/s -> Mbps dihitung server).

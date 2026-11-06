@@ -147,8 +147,10 @@ function onData(d) {
 
     // zram (ratio/pct sudah dihitung server)
     const zram = d.zram || {};
-    $('kpi-zram-comp').textContent = fmtB(zram.compressed) + ' / ' + fmtB(zram.disk_size);
-    $('kpi-zram-ratio').textContent = ((zram.ratio || 0).toFixed(1)) + 'x';
+    $('kpi-zram-used').textContent = fmtB(zram.used);
+    $('kpi-zram-total').textContent = '/ ' + fmtB(zram.disk_size);
+    $('kpi-zram-pct').textContent = (zram.pct || 0).toFixed(0) + '% Used';
+    $('kpi-zram-ratio').textContent = (zram.ratio || 0).toFixed(1) + '%';
     $('kpi-zram-bar').style.width = (zram.pct || 0) + '%';
 
     $('kpi-net-total').textContent = netMbps.toFixed(1);
