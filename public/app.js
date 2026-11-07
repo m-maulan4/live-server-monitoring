@@ -223,11 +223,18 @@ function renderProcesses(procs) {
     tbody.replaceChildren(frag);
 }
 
+const MAX_LOGS = 50;                 // maksimal log tampil di terminal
+const seenCursors = new Set();       // dedupe log (server kirim cache saat journalctl gagal)
+
 function appendLogs(logs) {
     const body = $('terminal-body');
     $('term-packet-count').textContent = `${packetCounter} packets`;
     const frag = document.createDocumentFragment();
     logs.forEach(l => {
+        if (l.cursor) {
+            if (seenCursors.has(l.cursor)) return; // sudah pernah tampil
+            seenCursors.add(l.cursor);
+        }
         const t = (l.time || '').slice(11) || '--:--:--';
         const badge = l.priority === '3' ? ['[ERR]', 'text-rose-400']
             : l.priority === '4' ? ['[WARN]', 'text-yellow-300']
@@ -260,7 +267,12 @@ function appendLogs(logs) {
         frag.appendChild(div);
     });
     body.appendChild(frag);
-    while (body.children.length > 100) body.removeChild(body.firstChild);
+    while (body.children.length > MAX_LOGS) body.removeChild(body.firstChild);
+    // cap cursor set juga (buang yang tak akan muncul lagi)
+    if (seenCursors.size > MAX_LOGS * 4) {
+        const keep = new Set(logs.map(l => l.cursor).filter(Boolean));
+        seenCursors.forEach(c => { if (!keep.has(c)) seenCursors.delete(c); });
+    }
     if (autoScrollTerminal) body.scrollTop = body.scrollHeight;
 }
 

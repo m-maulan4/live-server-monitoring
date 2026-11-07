@@ -58,4 +58,5 @@ type Log struct {
 	Unit     string `json:"unit"`
 	Priority string `json:"priority"`
 	Message  string `json:"message"`
+	Cursor   string `json:"cursor"` // cursor journald (dedupe FE, tanpa "__")
 }

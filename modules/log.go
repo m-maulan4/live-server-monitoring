@@ -1,6 +1,7 @@
 package modules
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os/exec"
@@ -10,14 +11,25 @@ import (
 )
 
 var (
-	logMu     sync.Mutex
-	logCursor string // cursor journald entry terakhir yang sudah dikirim
+	logMu       sync.Mutex
+	logCursor   string           // cursor journald entry terakhir yang sudah dikirim
+	lastLogs    []Log             // cache: kirim saat journalctl gagal transien
 )
 
 const maxLogs = 50 // simpan 50 terbaru, yang lama dibuang
 
+// journalEntry cocok format -o json journald.
+type journalEntry struct {
+	Cursor    string          `json:"__CURSOR"`
+	Realtime  json.RawMessage `json:"__REALTIME_TIMESTAMP"`
+	Unit      string          `json:"_SYSTEMD_UNIT"`
+	Ident     string          `json:"SYSLOG_IDENTIFIER"`
+	Priority  string          `json:"PRIORITY"`
+	Message   json.RawMessage `json:"MESSAGE"`
+}
+
 // SystemLog: panggilan pertama kirim `n` entry terakhir, lalu hanya entry
-// BARU (via journalctl --after-cursor). Data lama tidak dikirim ulang.
+// BARU (via journalctl --after-cursor). Gagal transien → kirim cache.
 func SystemLog(n int) ([]Log, error) {
 	logMu.Lock()
 	defer logMu.Unlock()
@@ -35,32 +47,43 @@ func SystemLog(n int) ([]Log, error) {
 		if logCursor != "" {
 			logCursor = "" // cursor basi (journald rotate) → full fetch berikutnya
 		}
-		return nil, err
+		return lastLogs, nil // kirim cache, jangan kosongkan UI
 	}
 
 	var logs []Log
-	for _, line := range splitLines(string(out)) {
-		var m map[string]json.RawMessage
-		if json.Unmarshal([]byte(line), &m) != nil {
+	for len(out) > 0 {
+		var line []byte
+		if i := bytes.IndexByte(out, '\n'); i >= 0 {
+			line, out = out[:i], out[i+1:]
+		} else {
+			line, out = out, nil
+		}
+		if len(line) == 0 {
 			continue
 		}
-		if c := strField(m["__CURSOR"]); c != "" {
-			logCursor = c
+		var e journalEntry
+		if json.Unmarshal(line, &e) != nil {
+			continue
+		}
+		if e.Cursor != "" {
+			logCursor = e.Cursor
 		}
 		logs = append(logs, Log{
-			Time:     tsString(m["__REALTIME_TIMESTAMP"]),
-			Unit:     firstNonEmpty(strField(m["_SYSTEMD_UNIT"]), strField(m["SYSLOG_IDENTIFIER"])),
-			Priority: strField(m["PRIORITY"]),
-			Message:  msgString(m["MESSAGE"]),
+			Time:     tsString(e.Realtime),
+			Unit:     firstNonEmpty(e.Unit, e.Ident),
+			Priority: e.Priority,
+			Message:  msgString(e.Message),
+			Cursor:   e.Cursor,
 		})
 	}
 	if len(logs) > maxLogs {
-		logs = logs[len(logs)-maxLogs:] // buang lama, simpan 50 terbaru
+		logs = logs[len(logs)-maxLogs:]
 	}
+	lastLogs = logs
 	return logs, nil
 }
 
-// MESSAGE bisa string atau array byte (kalau ada karakter kontrol).
+// msgString: MESSAGE bisa string atau array byte (karakter kontrol).
 func msgString(raw json.RawMessage) string {
 	var s string
 	if json.Unmarshal(raw, &s) == nil {
@@ -73,13 +96,7 @@ func msgString(raw json.RawMessage) string {
 	return ""
 }
 
-func strField(raw json.RawMessage) string {
-	var s string
-	json.Unmarshal(raw, &s)
-	return s
-}
-
-// __REALTIME_TIMESTAMP = microsecond epoch string/number; ubah ke RFC3339.
+// tsString: __REALTIME_TIMESTAMP = microsecond epoch string/number; ubah ke RFC3339.
 func tsString(raw json.RawMessage) string {
 	var us int64
 	if json.Unmarshal(raw, &us) != nil {
@@ -93,23 +110,6 @@ func tsString(raw json.RawMessage) string {
 		return ""
 	}
 	return time.UnixMicro(us).Format(time.RFC3339)
-}
-
-func splitLines(s string) []string {
-	var out []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			if i > start {
-				out = append(out, s[start:i])
-			}
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		out = append(out, s[start:])
-	}
-	return out
 }
 
 func firstNonEmpty(a, b string) string {
