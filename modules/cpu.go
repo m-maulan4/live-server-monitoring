@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -17,6 +18,10 @@ type cpuTimes struct {
 var (
 	cpuMu   sync.RWMutex
 	cpuStat = CPU{}
+
+	// cpuActive: 1 = ada client → sampler jalan tiap 500ms;
+	// 0 = idle → tidur, nol baca /proc/stat.
+	cpuActive atomic.Bool
 )
 
 // InitCPU mulai kolektor background: sampling /proc/stat tiap 500ms,
@@ -26,26 +31,35 @@ func InitCPU() {
 	go func() {
 		var prev cpuTimes
 		for {
-			cur, err := readCpuTimes()
-			if err == nil {
-				var c CPU
-				c.Cores = cur.cores
-				if prev.total > 0 && cur.total > prev.total {
-					idle := cur.idle - prev.idle
-					total := cur.total - prev.total
-					if total > 0 {
-						c.Usage = (1 - float64(idle)/float64(total)) * 100
+			if cpuActive.Load() {
+				cur, err := readCpuTimes()
+				if err == nil {
+					var c CPU
+					c.Cores = cur.cores
+					if prev.total > 0 && cur.total > prev.total {
+						idle := cur.idle - prev.idle
+						total := cur.total - prev.total
+						if total > 0 {
+							c.Usage = (1 - float64(idle)/float64(total)) * 100
+						}
 					}
+					cpuMu.Lock()
+					cpuStat = c
+					cpuMu.Unlock()
+					prev = cur
 				}
-				cpuMu.Lock()
-				cpuStat = c
-				cpuMu.Unlock()
-				prev = cur
+				time.Sleep(500 * time.Millisecond)
+				continue
 			}
-			time.Sleep(500 * time.Millisecond)
+			// idle: tidur 1s, cek lagi (tak bermakna baca /proc/stat tanpa client)
+			time.Sleep(time.Second)
 		}
 	}()
 }
+
+// SetCPUActive aktif/nonaktifkan sampling background. Dipanggil main() saat
+// client subscribe/unsubscribe — hemat CPU di VPS idle.
+func SetCPUActive(on bool) { cpuActive.Store(on) }
 
 // CPUUsage kembalikan cache CPU (instan).
 func CPUUsage() (CPU, error) {

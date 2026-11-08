@@ -5,24 +5,22 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
+)
+
+// meminfo read dari /proc/meminfo sekali per detik — RAMUsage & ZramUsage
+// (swap) dipanggil dalam snapshot yang sama, cukup baca 1×.
+var (
+	memInfoMu                 sync.Mutex
+	memInfoT                  time.Time
+	memTotal, memAvail        uint64
+	memSwapTotal, memSwapFree uint64
 )
 
 // RAMUsage baca /proc/meminfo (semua nilai byte).
 func RAMUsage() (RAM, error) {
-	b, err := os.ReadFile("/proc/meminfo")
-	if err != nil {
-		return RAM{}, err
-	}
-	get := func(key string) uint64 {
-		for _, line := range strings.Split(string(b), "\n") {
-			if strings.HasPrefix(line, key+":") {
-				n, _ := strconv.ParseUint(strings.Fields(line)[1], 10, 64)
-				return n * 1024
-			}
-		}
-		return 0
-	}
-	total, avail := get("MemTotal"), get("MemAvailable")
+	total, avail, _, _ := memInfo()
 	used := total - avail
 	pct := 0.0
 	if total > 0 {
@@ -72,23 +70,39 @@ func ZramUsage() (Zram, error) {
 
 // swapUsed = SwapTotal - SwapFree (byte), sama persis dengan "used" dari free -h.
 func swapUsed() uint64 {
-	b, err := os.ReadFile("/proc/meminfo")
-	if err != nil {
-		return 0
-	}
-	var total, free uint64
-	for _, line := range strings.Split(string(b), "\n") {
-		switch {
-		case strings.HasPrefix(line, "SwapTotal:"):
-			total = memKb(line) * 1024
-		case strings.HasPrefix(line, "SwapFree:"):
-			free = memKb(line) * 1024
-		}
-	}
+	_, _, total, free := memInfo()
 	if total > free {
 		return total - free
 	}
 	return 0
+}
+
+// memInfo baca /proc/meminfo sekali per detik, cache hasil untuk seluruh
+// pemanggil dalam jendela waktu itu.
+func memInfo() (total, avail, swapTotal, swapFree uint64) {
+	memInfoMu.Lock()
+	defer memInfoMu.Unlock()
+	if time.Since(memInfoT) < time.Second {
+		return memTotal, memAvail, memSwapTotal, memSwapFree
+	}
+	b, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return memTotal, memAvail, memSwapTotal, memSwapFree // kembalikan cache lama
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		switch {
+		case strings.HasPrefix(line, "MemTotal:"):
+			memTotal = memKb(line) * 1024
+		case strings.HasPrefix(line, "MemAvailable:"):
+			memAvail = memKb(line) * 1024
+		case strings.HasPrefix(line, "SwapTotal:"):
+			memSwapTotal = memKb(line) * 1024
+		case strings.HasPrefix(line, "SwapFree:"):
+			memSwapFree = memKb(line) * 1024
+		}
+	}
+	memInfoT = time.Now()
+	return memTotal, memAvail, memSwapTotal, memSwapFree
 }
 
 // memKb parse nilai kB dari baris /proc/meminfo.

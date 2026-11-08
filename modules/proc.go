@@ -2,6 +2,7 @@ package modules
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path"
 	"sort"
@@ -50,11 +51,11 @@ func Processes(top int) ([]Process, error) {
 		rss  uint64
 		cpu  float64
 	}
-	var ps []pinfo
+	ps := make([]pinfo, 0, len(entries))
 
 	procMu.Lock()
 	defer procMu.Unlock()
-	newPrev := make(map[int]procSample)
+	newPrev := make(map[int]procSample, len(entries))
 	for _, e := range entries {
 		pid, err := strconv.Atoi(e.Name())
 		if err != nil {
@@ -89,8 +90,8 @@ func Processes(top int) ([]Process, error) {
 	}
 
 	// agregat per nama (sum), PID = instans pertama.
-	var rows []Process
-	seen := make(map[string]int)
+	rows := make([]Process, 0, len(ps))
+	seen := make(map[string]int, len(ps))
 	for i := range ps {
 		p := ps[i]
 		if idx, ok := seen[p.name]; ok {
@@ -112,7 +113,7 @@ func Processes(top int) ([]Process, error) {
 // procPSS: PSS (proportional shared size) dari /proc/<pid>/smaps_rollup, byte.
 // Pss: <kB> — halaman shared dibagi rata ke semua pemakai.
 func procPSS(pid int) uint64 {
-	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/smaps_rollup")
+	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/smaps_rollup", pid))
 	if err != nil {
 		return 0
 	}
@@ -128,7 +129,7 @@ func procPSS(pid int) uint64 {
 // procStat: satu baca /proc/<pid>/stat -> nama (comm), RSS (field 24, page),
 // utime (14) + stime (15).
 func procStat(pid int) (name string, rss, utime, stime uint64, ok bool) {
-	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
 	if err != nil {
 		return "", 0, 0, 0, false
 	}
@@ -162,7 +163,7 @@ func procStat(pid int) (name string, rss, utime, stime uint64, ok bool) {
 // catatan: argv[0] bisa berisi flag (Chrome: "/path/chrome --type=renderer ...")
 // → basename lalu potong di spasi pertama.
 func cmdName(pid int) string {
-	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/cmdline")
+	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
 	if err != nil || len(b) == 0 || b[0] == 0 {
 		return ""
 	}

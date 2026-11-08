@@ -277,23 +277,48 @@ function appendLogs(logs) {
 }
 
 // ---- SSE ----
-const es = new EventSource('/health');
-es.onmessage = e => {
-    if (!isStreaming) return;
-    try {
-        const d = JSON.parse(e.data);
-        window._lastData = d;
-        onData(d);
-    } catch (err) { console.error('render error:', err); }
-};
-es.onerror = () => {
-    $('ws-status-text').textContent = 'SSE RECONNECT';
-    setIntervalBadge(2000);
-};
-es.onopen = () => {
-    $('ws-status-text').textContent = 'interval: --ms';
-    setIntervalBadge(0);
-};
+// Reconnect stream tiap ~1MB byte diterima → buang buffer parser EventSource
+// yang tumbuh tanpa batas (sumber browser makin berat). Ringan: tanpa reload
+// halaman/Chart.js/CDN. State chart ikut di-reset supaya memori tidak numpuk.
+const RX_LIMIT = 1_000_000; // 1MB
+const encoder = new TextEncoder();
+let rxBytes = 0;
+let es = null;
+
+function startStream() {
+    es = new EventSource('/health');
+    es.onmessage = e => {
+        if (!isStreaming) return;
+        try {
+            const d = JSON.parse(e.data);
+            window._lastData = d;
+            onData(d);
+            rxBytes += encoder.encode(e.data).length;
+            if (rxBytes >= RX_LIMIT) resetStream();
+        } catch (err) { console.error('render error:', err); }
+    };
+    es.onerror = () => {
+        $('ws-status-text').textContent = 'SSE RECONNECT';
+        setIntervalBadge(2000);
+    };
+    es.onopen = () => {
+        $('ws-status-text').textContent = 'interval: --ms';
+        setIntervalBadge(0);
+    };
+}
+
+// buang buffer + state lama, buka stream baru (counter & chart segar).
+function resetStream() {
+    if (es) es.close();
+    rxBytes = 0;
+    fifoLabels.length = fifoCpuData.length = fifoRamData.length = fifoNetData.length = 0;
+    sparkCpuData.fill(0);
+    sparkRamData.fill(0);
+    seenCursors.clear();
+    startStream();
+}
+
+startStream();
 
 // ---- controls ----
 // script ada di akhir <body> — DOM sudah siap, init langsung (tanpa nunggu DOMContentLoaded)

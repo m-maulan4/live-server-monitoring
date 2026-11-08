@@ -84,7 +84,10 @@ func collect() []byte {
 	s.Network, _ = modules.NetworkUsage()
 	s.Logs, _ = modules.SystemLog(50)
 	s.Processes, _ = modules.Processes(10)
-	b, _ := json.Marshal(s)
+	b, err := json.Marshal(s)
+	if err != nil {
+		return nil // gagal marshal → skip tick, jangan kirim data korup
+	}
 	return b
 }
 
@@ -110,7 +113,11 @@ func sse(h *hub) http.HandlerFunc {
 		w.Header().Set("Cache-Control", "no-cache, no-transform")
 		w.Header().Set("Connection", "keep-alive")
 		ch := h.subscribe()
-		defer h.unsubscribe(ch)
+		modules.SetCPUActive(true)
+		defer func() {
+			h.unsubscribe(ch)
+			modules.SetCPUActive(!h.empty())
+		}()
 		fl.Flush() // dorong header segera; Cloudflare butuh flush-per-event
 
 		for {
@@ -137,5 +144,12 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	http.ListenAndServe(":"+port, nil)
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           nil,
+		ReadHeaderTimeout: 5 * time.Second, // cegah slowloris/leak; SSE stream bebas (tanpa WriteTimeout)
+	}
+	if err := srv.ListenAndServe(); err != nil {
+		panic(err)
+	}
 }
