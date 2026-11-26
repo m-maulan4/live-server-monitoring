@@ -4,7 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Server Monitoring</title>
+    <meta name="description" content="ServMon — single-server health monitor over SSE.">
+    <title>ServMon · Server Health</title>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss-browser/4.3.3/index.global.js"
         integrity="sha512-11j7Mb+vY6TL1kQG4fUbs+0sZ770yqknHwGYYHeVpEB2ftG9IfkSWK7tdjQMBf5kXKgkHyerYcjQYEEX6muFDA=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -14,8 +16,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
     <script>
@@ -23,508 +24,330 @@
             darkMode: 'class',
             theme: {
                 extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
-                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
                     colors: {
-                        darkbg: '#060913', panel: '#0b1120', bordercolor: '#1e293b',
-                        neonCyan: '#06b6d4', neonEmerald: '#10b981', neonViolet: '#8b5cf6',
-                        neonAmber: '#f59e0b', neonRose: '#ef4444'
+                        // Night indigo + dream violet on OLED
+                        bg: '#0F172A',
+                        card: '#192134',
+                        cardHi: '#212B42',
+                        muted: '#131936',
+                        ink: '#FFFFFF',
+                        dim: '#94A3B8',
+                        faint: '#64748B',
+                        indigo: '#4338CA',
+                        indigoHi: '#6366F1',
+                        violet: '#7C3AED',
+                        violetHi: '#A78BFA',
+                        green: '#22C55E',
+                        amber: '#F59E0B',
+                        red: '#DC2626',
                     }
                 }
             }
         }
     </script>
+
     <style>
+        :root { color-scheme: dark; }
+        * { -webkit-tap-highlight-color: transparent; }
+
         body {
-            background-color: #060913;
-            color: #f8fafc;
+            background:
+                radial-gradient(900px 500px at 12% -10%, rgba(67, 56, 202, 0.18), transparent 60%),
+                radial-gradient(700px 420px at 100% 0%, rgba(124, 58, 237, 0.14), transparent 60%),
+                #0F172A;
+            color: #fff;
             font-family: 'Inter', sans-serif;
             overflow-x: hidden;
         }
 
-        .glow-emerald {
-            box-shadow: 0 0 15px rgba(16, 185, 129, 0.25);
+        .num { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+
+        .card {
+            background: linear-gradient(160deg, #192134, #151c30);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 18px;
         }
+        .card:hover { border-color: rgba(129, 140, 248, 0.35); }
 
-        .glow-cyan {
-            box-shadow: 0 0 15px rgba(6, 182, 212, 0.25);
+        /* Gauge ring */
+        .gauge-track { stroke: rgba(255, 255, 255, 0.07); }
+        .gauge-val { transition: stroke-dashoffset 600ms cubic-bezier(.4, 0, .2, 1); }
+
+        /* Bullet meter */
+        .bullet-track { background: rgba(255, 255, 255, 0.07); }
+        .bullet-fill { transition: width 600ms cubic-bezier(.4, 0, .2, 1); }
+
+        /* Health pulse */
+        @keyframes healthpulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: .55; transform: scale(1.18); }
         }
+        .pulse { animation: healthpulse 2s ease-in-out infinite; }
 
-        .glow-text-cyan {
-            text-shadow: 0 0 10px rgba(6, 182, 212, 0.6);
-        }
+        /* SSE link dot */
+        @keyframes linkblink { 50% { opacity: .35; } }
+        .link-dot { animation: linkblink 1.6s step-end infinite; }
 
-        .glow-text-emerald {
-            text-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
-        }
+        :focus-visible { outline: 2px solid #A78BFA; outline-offset: 2px; border-radius: 10px; }
 
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #2a3550; border-radius: 999px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3a4769; }
 
-        ::-webkit-scrollbar-track {
-            background: #070d19;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #1e293b;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #334155;
-        }
-
-        @keyframes pulse-fast {
-
-            0%,
-            100% {
-                opacity: 1;
-                transform: scale(1);
-            }
-
-            50% {
-                opacity: .4;
-                transform: scale(1.1);
-            }
-        }
-
-        .animate-pulse-fast {
-            animation: pulse-fast 1s infinite ease-in-out;
-        }
-
-        .terminal-cursor::after {
-            content: '█';
-            animation: blink 1s infinite;
-            color: #10b981;
-            margin-left: 2px;
-        }
-
-        @keyframes blink {
-
-            0%,
-            100% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0;
-            }
+        @media (prefers-reduced-motion: reduce) {
+            * { animation: none !important; transition: none !important; }
         }
     </style>
 </head>
 
-<body
-    class="min-h-screen flex flex-col bg-[#060913] text-slate-100 antialiased selection:bg-cyan-500 selection:text-black">
+<body class="min-h-screen flex flex-col antialiased selection:bg-indigoHi selection:text-white">
 
-    <!-- ================= HEADER / NAVBAR ================= -->
-    <!-- Brand + badge status koneksi SSE + clock -->
-    <header class="sticky top-0 z-40 bg-[#0b1120]/90 backdrop-blur-md border-b border-slate-800/80 px-4 lg:px-8 py-3">
-        <div class="max-w-[1920px] mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
-            <!-- Brand (ikon radio + judul) + subjudul -->
-            <div class="flex items-center justify-between w-full md:w-auto gap-4 flex-wrap">
-                <div class="flex items-center gap-3">
-                    <!-- Logo bulat gradient (ubah warna emerald/cyan di sini) -->
-                    <div
-                        class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-emerald-500 flex items-center justify-center glow-cyan">
-                        <i data-lucide="radio" class="w-6 h-6 text-slate-950 font-bold"></i>
-                    </div>
-                    <div>
-                        <!-- Judul brand -->
-                        <div class="flex items-center gap-2">
-                            <span
-                                class="font-extrabold text-lg sm:text-xl tracking-wider text-white uppercase leading-tight">Live
-                                Server
-                                Monitoring</span>
-                        </div>
-                    </div>
+    <!-- ===== HEADER ===== -->
+    <header class="sticky top-0 z-50 backdrop-blur-xl bg-bg/70 border-b border-white/[0.06]">
+        <div class="max-w-[1600px] mx-auto px-5 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo to-violet flex items-center justify-center shadow-lg shadow-indigo/25">
+                    <i data-lucide="heart-pulse" class="w-5 h-5 text-white" aria-hidden="true"></i>
                 </div>
-
-                <div class="h-6 w-px bg-slate-800 hidden md:block"></div>
-
-                <!-- Badge status koneksi SSE (hijau = connected, amber = reconnect; JS yang ganti class) -->
-                <div id="ws-badge" title="Interval pesan SSE"
-                    class="flex items-center gap-2 bg-emerald-950/40 border border-emerald-500/40 px-3 py-1.5 rounded-full glow-emerald">
-                    <span class="relative flex h-2.5 w-2.5">
-                        <!-- Titik berkedip (animasi pulse) -->
-                        <span id="ws-ping-dot"
-                            class="animate-pulse-fast absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span id="ws-dot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                    </span>
-                    <!-- Teks status: JS set interval ms / "SSE RECONNECT" -->
-                    <span id="ws-status-text" class="text-xs font-bold tracking-wider text-emerald-400 font-mono">interval: --ms</span>
+                <div>
+                    <div class="font-bold text-white leading-tight">ServMon</div>
+                    <div class="text-[11px] text-faint">Single-server health</div>
                 </div>
             </div>
 
-            <div class="flex items-center gap-2 sm:gap-3 w-full md:w-auto justify-end">
-                <!-- Indikator buffer chart (n / 30 points), diisi JS -->
-                <div
-                    class="hidden lg:flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-xs font-mono">
-                    <i data-lucide="layers" class="w-3.5 h-3.5 text-cyan-400"></i>
-                    <span class="text-slate-400">Buffer:</span>
-                    <span id="buffer-count-badge" class="font-bold text-white">0 / 30 pts</span>
+            <div class="flex items-center gap-3">
+                <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-card border border-white/[0.08]">
+                    <i data-lucide="server" class="w-3.5 h-3.5 text-indigoHi" aria-hidden="true"></i>
+                    <span id="h-host" class="text-xs font-medium text-dim">--</span>
                 </div>
-                <!-- Jam lokal client (diupdate JS tiap 50ms) -->
-                <div class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-right hidden xl:block">
-                    <div id="realtime-clock" class="text-xs font-mono font-bold text-cyan-400">00:00:00.000</div>
-                    <div class="text-[9px] text-slate-500 uppercase tracking-widest font-mono">LOCAL CLIENT TIME</div>
+                <!-- SSE link status (color/text set by app.js) -->
+                <div id="h-health" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green/10 border border-green/30">
+                    <span id="h-health-dot" class="link-dot w-2 h-2 rounded-full bg-green"></span>
+                    <span id="h-health-text" class="text-xs font-semibold text-green">CONNECTING</span>
                 </div>
+                <div class="hidden sm:block text-xs num text-faint" id="h-clock">--:--:--</div>
             </div>
         </div>
     </header>
 
-    <!-- ================= MAIN ================= -->
-    <main class="flex-1 w-full mx-auto p-4 lg:p-6 space-y-5">
+    <main class="flex-1 w-full max-w-[1600px] mx-auto px-5 lg:px-8 py-6 space-y-5">
 
-        <!-- ===== KPI CARDS (CPU, RAM, Storage, ZRAM, Network) + SYSTEM INFO (span 2) ===== -->
-        <!-- grid: 1 kolom HP, 2 tablet, 3 desktop, 4 layar lebar; SYSTEM INFO melebar 2 kolom via xl:col-span-2 -->
-        <section class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-
-            <!-- CARD 1: CPU Load (nilai + peak + cores + sparkline + progress bar) -->
-            <div
-                class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden group hover:border-cyan-500/40 transition">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <i data-lucide="cpu" class="w-4 h-4 text-cyan-400"></i> CPU Load Total
-                    </span>
-                </div>
-                <div class="flex items-baseline justify-between mt-1">
-                    <div>
-                        <!-- Nilai CPU % saat ini -->
-                        <span id="kpi-cpu-value"
-                            class="text-3xl font-extrabold font-mono text-white tracking-tight glow-text-cyan">00%</span>
-                        <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5">
-                            <span>Peak Live: <strong id="kpi-cpu-peak"
-                                    class="text-slate-200 font-mono">0%</strong></span>
-                            <span>&bull;</span>
-                            <span id="kpi-cpu-cores" class="font-mono">- Cores</span>
-                        </div>
-                    </div>
-                    <!-- Mini sparkline CPU (digerakkan Chart.js) -->
-                    <div class="w-16 h-10"><canvas id="mini-sparkline-cpu"></canvas></div>
-                </div>
-                <!-- Progress bar CPU; width % di-set JS -->
-                <div class="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
-                    <div id="kpi-cpu-bar"
-                        class="bg-gradient-to-r from-cyan-500 to-emerald-400 h-full rounded-full transition-all duration-300"
-                        style="width: 0%"></div>
+        <!-- ===== HERO: overall health + uptime ===== -->
+        <section class="card p-6 flex flex-col md:flex-row items-center gap-6 md:gap-10">
+            <div class="relative shrink-0">
+                <svg width="150" height="150" viewBox="0 0 150 150" class="-rotate-90">
+                    <circle cx="75" cy="75" r="66" fill="none" stroke-width="11" class="gauge-track"></circle>
+                    <circle id="hero-ring" cx="75" cy="75" r="66" fill="none" stroke-width="11"
+                        stroke="url(#gaugeGrad)" stroke-linecap="round" stroke-dasharray="414.7" stroke-dashoffset="414.7"
+                        class="gauge-val"></circle>
+                    <defs>
+                        <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#6366F1"></stop>
+                            <stop offset="100%" stop-color="#A78BFA"></stop>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                    <span id="hero-score" class="num text-4xl font-bold text-white">--</span>
+                    <span class="text-[10px] uppercase tracking-[0.2em] text-faint mt-1">Health</span>
                 </div>
             </div>
 
-            <!-- CARD 2: RAM Allocated (used GB dari total, % + available + sparkline + bar) -->
-            <div
-                class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden group hover:border-violet-500/40 transition">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <i data-lucide="memory-stick" class="w-4 h-4 text-violet-400"></i> RAM Allocated
-                    </span>
-                </div>
-                <div class="flex items-baseline justify-between mt-1">
-                    <div>
-                        <div class="flex items-baseline gap-1">
-                            <span id="kpi-ram-gb"
-                                class="text-3xl font-extrabold font-mono text-white tracking-tight">00.0</span>
-                            <span id="kpi-ram-total" class="text-xs font-semibold text-slate-400">GB / 0 GB</span>
-                        </div>
-                        <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5">
-                            <span id="kpi-ram-pct" class="text-violet-400 font-mono font-bold">0% Used</span>
-                            <span>&bull;</span>
-                            <span id="kpi-ram-avail" class="font-mono">Available: -</span>
-                        </div>
-                    </div>
-                    <div class="w-16 h-10"><canvas id="mini-sparkline-ram"></canvas></div>
-                </div>
-                <div class="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
-                    <div id="kpi-ram-bar"
-                        class="bg-gradient-to-r from-violet-500 to-indigo-400 h-full rounded-full transition-all duration-300"
-                        style="width: 0%"></div>
+            <div class="flex-1 text-center md:text-left">
+                <h1 class="text-2xl font-bold text-white" id="hero-title">Connecting…</h1>
+                <p class="text-dim mt-1.5 text-sm" id="hero-sub">Waiting for first sample from /health</p>
+                <div class="flex flex-wrap justify-center md:justify-start gap-2 mt-4">
+                    <span class="px-2.5 py-1 rounded-lg bg-cardHi border border-white/[0.06] text-xs text-dim">CPU <b id="hero-cpu" class="text-white num">--%</b></span>
+                    <span class="px-2.5 py-1 rounded-lg bg-cardHi border border-white/[0.06] text-xs text-dim">MEM <b id="hero-mem" class="text-white num">--%</b></span>
+                    <span class="px-2.5 py-1 rounded-lg bg-cardHi border border-white/[0.06] text-xs text-dim">DISK <b id="hero-disk" class="text-white num">--%</b></span>
+                    <span class="px-2.5 py-1 rounded-lg bg-cardHi border border-white/[0.06] text-xs text-dim">LOAD <b id="hero-load" class="text-white num">--</b></span>
                 </div>
             </div>
 
-            <!-- CARD 3: ZRAM (used cocok free -h / total, compressed %, bar = fill%) -->
-            <div
-                class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden group hover:border-fuchsia-500/40 transition">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <i data-lucide="zap" class="w-4 h-4 text-fuchsia-400"></i> ZRAM Swap
-                    </span>
-                </div>
-                <div class="flex items-baseline justify-between mt-1">
-                    <div>
-                        <div class="flex items-baseline gap-1">
-                            <span id="kpi-zram-used"
-                                class="text-3xl font-extrabold font-mono text-white tracking-tight">0 B</span>
-                            <span id="kpi-zram-total" class="text-xs font-semibold text-slate-400">/ 0 B</span>
-                        </div>
-                        <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5">
-                            <span id="kpi-zram-pct" class="text-fuchsia-400 font-mono font-bold">0% Used</span>
-                            <span>&bull;</span>
-                            <span>compressed <span id="kpi-zram-ratio" class="font-mono text-slate-200">0%</span></span>
-                        </div>
-                    </div>
-                </div>
-                <div class="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
-                    <div id="kpi-zram-bar"
-                        class="bg-gradient-to-r from-fuchsia-500 to-violet-400 h-full rounded-full transition-all duration-300"
-                        style="width: 0%"></div>
-                </div>
+            <div class="text-center md:text-right shrink-0">
+                <div class="num text-3xl font-bold text-violetHi" id="hero-uptime">--d --h</div>
+                <div class="text-[10px] uppercase tracking-[0.2em] text-faint mt-1">Uptime</div>
+                <div class="text-xs text-faint mt-3">Stream <span id="hero-checked" class="text-dim num">0</span> samples</div>
             </div>
-
-            <!-- CARD 4: Storage (agregat semua mount: used GB, %, total, bar, daftar mount) -->
-            <div
-                class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden group hover:border-sky-500/40 transition">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <i data-lucide="hard-drive" class="w-4 h-4 text-sky-400"></i> Storage
-                    </span>
-                </div>
-                <div class="flex items-baseline justify-between mt-1">
-                    <div>
-                        <div class="flex items-baseline gap-1">
-                            <span id="kpi-storage-gb"
-                                class="text-3xl font-extrabold font-mono text-white tracking-tight">0.0</span>
-                            <span class="text-xs font-semibold text-slate-400">GB</span>
-                        </div>
-                        <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5">
-                            <span id="kpi-storage-pct" class="text-sky-400 font-mono font-bold">0% Used</span>
-                            <span>&bull;</span>
-                            <span id="kpi-storage-total" class="font-mono">Total: -</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
-                    <div id="kpi-storage-bar"
-                        class="bg-gradient-to-r from-sky-500 to-cyan-400 h-full rounded-full transition-all duration-300"
-                        style="width: 0%"></div>
-                </div>
-            </div>
-
-            <!-- CARD 5: Network Throughput (RX/TX Mbps dari delta byte kumulatif; bar dua warna) -->
-            <div
-                class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden group hover:border-emerald-500/40 transition">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <i data-lucide="arrow-up-down" class="w-4 h-4 text-emerald-400"></i> Network Throughput
-                    </span>
-                </div>
-                <div class="mt-1">
-                    <div class="flex items-baseline justify-between">
-                        <span id="kpi-net-total"
-                            class="text-3xl font-extrabold font-mono text-emerald-400 tracking-tight glow-text-emerald">0.0</span>
-                        <span class="text-xs font-bold font-mono text-emerald-500">Mbps Total</span>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-[11px] font-mono mt-1 pt-1 border-t border-slate-800/60">
-                        <span class="text-slate-300 flex items-center gap-1"><i data-lucide="arrow-down-left"
-                                class="w-3 h-3 text-cyan-400"></i> RX: <strong id="kpi-net-rx" class="text-white">0
-                                Mbps</strong></span>
-                        <span class="text-slate-300 flex items-center gap-1"><i data-lucide="arrow-up-right"
-                                class="w-3 h-3 text-emerald-400"></i> TX: <strong id="kpi-net-tx" class="text-white">0
-                                Mbps</strong></span>
-                    </div>
-                </div>
-                <div class="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden flex">
-                    <div id="kpi-net-rx-bar" class="bg-cyan-400 h-full transition-all duration-300" style="width: 50%">
-                    </div>
-                    <div id="kpi-net-tx-bar" class="bg-emerald-400 h-full transition-all duration-300"
-                        style="width: 50%"></div>
-                </div>
-            </div>
-
-            <!-- CARD 6: Total Traffic (akumulasi download/upload byte sejak boot; bar proporsi) -->
-            <div
-                class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden group hover:border-amber-500/40 transition">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <i data-lucide="download" class="w-4 h-4 text-amber-400"></i> Total Traffic
-                    </span>
-                </div>
-                <div class="mt-1">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <div class="text-[10px] uppercase tracking-widest text-slate-500">Download</div>
-                            <div id="kpi-rx-total" class="text-xl font-bold font-mono text-amber-400 mt-0.5">0 B</div>
-                        </div>
-                        <div>
-                            <div class="text-[10px] uppercase tracking-widest text-slate-500">Upload</div>
-                            <div id="kpi-tx-total" class="text-xl font-bold font-mono text-orange-400 mt-0.5">0 B</div>
-                        </div>
-                    </div>
-                    <div class="text-[10px] text-slate-500 font-mono mt-1">akumulasi sejak boot</div>
-                </div>
-                <div class="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden flex">
-                    <div id="kpi-rx-total-bar" class="bg-amber-400 h-full transition-all duration-300" style="width: 50%">
-                    </div>
-                    <div id="kpi-tx-total-bar" class="bg-orange-400 h-full transition-all duration-300"
-                        style="width: 50%"></div>
-                </div>
-            </div>
-
-            <!-- CARD 7: SYSTEM INFO (hostname/uptime, os/kernel, cpu/cores, load avg) -->
-            <div
-                class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden group hover:border-cyan-500/40 transition sm:col-span-2 md:col-span-3 xl:col-span-2">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <i data-lucide="server" class="w-4 h-4 text-cyan-400"></i> SYSTEM INFO
-                    </span>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2 text-sm font-mono">
-                    <div>
-                        <div class="text-xs font-medium text-slate-500 uppercase tracking-widest">Hostname</div>
-                        <div id="info-hostname" class="text-sm text-white font-bold truncate">-</div>
-                    </div>
-                    <div>
-                        <div class="text-xs font-medium text-slate-500 uppercase tracking-widest">Uptime</div>
-                        <div id="info-uptime" class="text-slate-200">-</div>
-                    </div>
-                    <div>
-                        <div class="text-xs font-medium text-slate-500 uppercase tracking-widest">CPU</div>
-                        <div id="info-cpumodel" class="text-cyan-300 font-bold truncate">-</div>
-                        <div id="info-cores" class="text-slate-400">- cores</div>
-                    </div>
-                    <div>
-                        <div class="text-xs font-medium text-slate-500 uppercase tracking-widest">Load Avg</div>
-                        <div id="info-load" class="text-amber-300 font-bold">- / - / -</div>
-                        <div id="info-loadtag" class="text-slate-400">1m / 5m / 15m</div>
-                    </div>
-                </div>
-            </div>
-
         </section>
 
-        <!-- ===== LIVE STREAM GRAPH (full width, chart FIFO 30 tick) ===== -->
-        <section class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-5 shadow-xl relative">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
-                <div>
-                    <div class="flex items-center gap-2">
-                        <h2 class="text-base font-bold text-white tracking-wide">Live Stream Graph (FIFO Buffer
-                            Scroll)
-                        </h2>
-                        <span class="relative flex h-2 w-2">
-                            <span
-                                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
-                        </span>
+        <!-- ===== KPI BENTO (gauge rings + bullets) ===== -->
+        <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+            <!-- CPU -->
+            <article class="card p-5 flex flex-col items-center">
+                <div class="w-full flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-dim flex items-center gap-1.5"><i data-lucide="cpu" class="w-4 h-4 text-indigoHi" aria-hidden="true"></i>CPU</span>
+                    <span class="text-[10px] text-faint num" id="kpi-cpu-cores">--</span>
+                </div>
+                <div class="relative my-1">
+                    <svg width="104" height="104" viewBox="0 0 104 104" class="-rotate-90">
+                        <circle cx="52" cy="52" r="44" fill="none" stroke-width="9" class="gauge-track"></circle>
+                        <circle id="kpi-cpu-ring" cx="52" cy="52" r="44" fill="none" stroke-width="9" stroke="#6366F1"
+                            stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="276.5" class="gauge-val"></circle>
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <span id="kpi-cpu-val" class="num text-2xl font-bold">--%</span>
                     </div>
-                    <p class="text-xs text-slate-400">30 data tick terbaru dari SSE. Data lama otomatis dikeluarkan
-                        dari
-                        antrean.</p>
                 </div>
-                <div class="flex flex-wrap items-center gap-3 text-xs font-mono text-slate-300">
-                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-cyan-500"></span>
-                        CPU</span>
-                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-violet-500"></span>
-                        RAM</span>
-                    <span class="flex items-center gap-1.5"><span
-                            class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Network</span>
+                <div class="text-[11px] text-faint mt-2">Peak <b id="kpi-cpu-peak" class="text-dim num">--%</b></div>
+            </article>
+
+            <!-- Memory -->
+            <article class="card p-5 flex flex-col items-center">
+                <div class="w-full flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-dim flex items-center gap-1.5"><i data-lucide="memory-stick" class="w-4 h-4 text-violetHi" aria-hidden="true"></i>Memory</span>
+                    <span class="text-[10px] text-faint num" id="kpi-mem-total">--</span>
                 </div>
-            </div>
+                <div class="relative my-1">
+                    <svg width="104" height="104" viewBox="0 0 104 104" class="-rotate-90">
+                        <circle cx="52" cy="52" r="44" fill="none" stroke-width="9" class="gauge-track"></circle>
+                        <circle id="kpi-mem-ring" cx="52" cy="52" r="44" fill="none" stroke-width="9" stroke="#A78BFA"
+                            stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="276.5" class="gauge-val"></circle>
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <span id="kpi-mem-val" class="num text-2xl font-bold">--%</span>
+                    </div>
+                </div>
+                <div class="text-[11px] text-faint mt-2"><b id="kpi-mem-used" class="text-dim num">--</b> / <span id="kpi-mem-free">--</span></div>
+            </article>
 
-            <div class="w-full h-[240px] sm:h-[300px] lg:h-[340px] relative">
-                <canvas id="liveFifoChart"></canvas>
-            </div>
+            <!-- Disk (bullet with thresholds) -->
+            <article class="card p-5 flex flex-col">
+                <div class="w-full flex items-center justify-between mb-3">
+                    <span class="text-xs font-medium text-dim flex items-center gap-1.5"><i data-lucide="hard-drive" class="w-4 h-4 text-indigoHi" aria-hidden="true"></i>Disk</span>
+                    <span class="text-[10px] text-faint num" id="kpi-disk-total">--</span>
+                </div>
+                <div class="flex-1 flex flex-col justify-center">
+                    <div class="flex items-baseline gap-1">
+                        <span id="kpi-disk-val" class="num text-3xl font-bold">--%</span>
+                        <span class="text-xs text-faint">used</span>
+                    </div>
+                    <div class="bullet-track h-3 rounded-full mt-3 relative overflow-hidden">
+                        <span class="absolute top-0 bottom-0 w-px bg-amber/70" style="left:70%"></span>
+                        <span class="absolute top-0 bottom-0 w-px bg-red/70" style="left:90%"></span>
+                        <div id="kpi-disk-fill" class="bullet-fill h-full rounded-full bg-gradient-to-r from-indigo to-indigoHi" style="width:0%"></div>
+                    </div>
+                    <div class="text-[11px] text-faint mt-2"><b id="kpi-disk-used" class="text-dim num">--</b> free of total</div>
+                </div>
+            </article>
 
+            <!-- ZRAM / Swap -->
+            <article class="card p-5 flex flex-col">
+                <div class="w-full flex items-center justify-between mb-3">
+                    <span class="text-xs font-medium text-dim flex items-center gap-1.5"><i data-lucide="zap" class="w-4 h-4 text-violetHi" aria-hidden="true"></i>ZRAM</span>
+                    <span class="text-[10px] text-faint num" id="kpi-swap-total">--</span>
+                </div>
+                <div class="flex-1 flex flex-col justify-center">
+                    <div class="flex items-baseline gap-1">
+                        <span id="kpi-swap-val" class="num text-3xl font-bold">--%</span>
+                        <span class="text-xs text-faint">used</span>
+                    </div>
+                    <div class="bullet-track h-3 rounded-full mt-3 relative overflow-hidden">
+                        <div id="kpi-swap-fill" class="bullet-fill h-full rounded-full bg-gradient-to-r from-violet to-violetHi" style="width:0%"></div>
+                    </div>
+                    <div class="text-[11px] text-faint mt-2">Compressed <b id="kpi-swap-ratio" class="text-dim num">--</b></div>
+                </div>
+            </article>
         </section>
 
-        <!-- ===== PROGRAM BERJALAN + TERMINAL SYSLOG (grid 2 kolom) ===== -->
-        <section class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <!-- ===== NETWORK + STREAM CHART ===== -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-            <!-- KIRI: daftar program berjalan (di-render JS ke #nodes-table-body) -->
-            <div
-                class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between shadow-xl lg:h-[480px]">
-                <div>
-                    <div class="flex items-center justify-between mb-4">
-                        <div>
-                            <h3 class="text-base font-bold text-white flex items-center gap-2">
-                                <i data-lucide="list" class="w-4 h-4 text-cyan-400"></i>
-                                Program Berjalan
-                            </h3>
-                            <p class="text-xs text-slate-400">Proses teratas berdasar RAM, dibaca dari /proc</p>
-                        </div>
-                        <span
-                            class="text-xs font-mono text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-lg border border-cyan-500/20 font-bold">TOP
-                            10</span>
+            <div class="card p-5 lg:col-span-2">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="font-semibold text-white flex items-center gap-2"><i data-lucide="activity" class="w-4 h-4 text-indigoHi" aria-hidden="true"></i>Live Utilization</h2>
+                        <p class="text-xs text-faint mt-0.5">Streaming from /health · rolling 30s window</p>
                     </div>
-
-                    <div class="overflow-x-auto overflow-y-auto h-[340px]">
-                        <table class="w-full text-left text-xs border-collapse">
-                            <thead class="sticky top-0 z-10 bg-slate-900">
-                                <tr
-                                    class="border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider">
-                                    <th class="py-3 px-3">PID</th>
-                                    <th class="py-3 px-3">Program</th>
-                                    <th class="py-3 px-3 text-right">CPU%</th>
-                                    <th class="py-3 px-3 text-right">RAM</th>
-                                </tr>
-                            </thead>
-                            <tbody id="nodes-table-body" class="divide-y divide-slate-800/60 font-mono"></tbody>
-                        </table>
+                    <div class="flex items-center gap-3 text-[11px] text-dim">
+                        <span class="flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-indigoHi inline-block" aria-hidden="true"></i>CPU</span>
+                        <span class="flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-violetHi inline-block" aria-hidden="true"></i>MEM</span>
                     </div>
                 </div>
-
-                <div
-                    class="pt-3 mt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 text-xs text-slate-400">
-                    <span>Proses dibaca langsung dari /proc (RSS = resident memory)</span>
-                    <span class="font-mono text-emerald-400 flex items-center gap-1 whitespace-nowrap">
-                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> Real-time Sync Active
-                    </span>
+                <div class="w-full h-[240px] sm:h-[280px]">
+                    <canvas id="streamChart"></canvas>
                 </div>
             </div>
 
-            <!-- KANAN: terminal syslog (log masuk via SSE; polos warna by priority, auto-scroll) -->
-            <div
-                class="bg-slate-950 border border-slate-800/90 rounded-2xl p-4 flex flex-col justify-between shadow-2xl relative font-mono lg:h-[480px]">
-                <div
-                    class="flex flex-wrap items-center justify-between gap-y-2 gap-x-3 border-b border-slate-800 pb-2.5 mb-3">
-                    <div class="flex items-center gap-2">
-                        <div class="flex gap-1.5">
-                            <span class="w-3 h-3 rounded-full bg-rose-500/80 inline-block"></span>
-                            <span class="w-3 h-3 rounded-full bg-amber-500/80 inline-block"></span>
-                            <span class="w-3 h-3 rounded-full bg-emerald-500/80 inline-block"></span>
-                        </div>
-                        <span class="text-xs font-bold text-slate-300 ml-2 flex items-center gap-1.5">
-                            <i data-lucide="terminal" class="w-3.5 h-3.5 text-cyan-400"></i> Terminal
-                        </span>
+            <div class="card p-5 flex flex-col">
+                <h2 class="font-semibold text-white flex items-center gap-2 mb-4"><i data-lucide="network" class="w-4 h-4 text-indigoHi" aria-hidden="true"></i>Network</h2>
+                <div class="flex items-baseline gap-1">
+                    <span id="net-total" class="num text-4xl font-bold text-white">--</span>
+                    <span class="text-sm text-faint">Mbps</span>
+                </div>
+                <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/[0.06]">
+                    <div>
+                        <div class="text-[10px] uppercase tracking-widest text-faint flex items-center gap-1"><i data-lucide="arrow-down" class="w-3 h-3 text-indigoHi" aria-hidden="true"></i>In</div>
+                        <div id="net-rx" class="num text-lg font-semibold mt-1 text-indigoHi">--</div>
                     </div>
-                    <div class="flex items-center gap-2 text-[11px]">
-                        <button id="btn-clear-terminal"
-                            class="text-slate-400 hover:text-white px-2 py-0.5 rounded hover:bg-slate-800 transition">Clear</button>
-                        <button id="btn-autoscroll"
-                            class="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 font-semibold">Auto-scroll
-                            ON</button>
+                    <div>
+                        <div class="text-[10px] uppercase tracking-widest text-faint flex items-center gap-1"><i data-lucide="arrow-up" class="w-3 h-3 text-violetHi" aria-hidden="true"></i>Out</div>
+                        <div id="net-tx" class="num text-lg font-semibold mt-1 text-violetHi">--</div>
                     </div>
                 </div>
-
-                <div id="terminal-body"
-                    class="h-[400px] lg:h-auto lg:flex-1 lg:min-h-0 overflow-y-auto space-y-1.5 pr-2 text-[11px] leading-relaxed">
+                <div class="mt-auto pt-4 border-t border-white/[0.06]">
+                    <div class="text-[10px] uppercase tracking-widest text-faint">Total transferred</div>
+                    <div class="flex justify-between text-sm mt-1.5">
+                        <span class="text-dim">↓ <b id="net-rx-tot" class="text-white num">--</b></span>
+                        <span class="text-dim">↑ <b id="net-tx-tot" class="text-white num">--</b></span>
+                    </div>
                 </div>
+            </div>
+        </section>
 
-                <div
-                    class="pt-2 mt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500">
-                    <span class="terminal-cursor">Listening SSE /health</span>
-                    <span>Received: <strong id="term-packet-count" class="text-cyan-400">0 packets</strong></span>
+        <!-- ===== PROCESSES + EVENTS ===== -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+            <!-- processes -->
+            <div class="card p-5 flex flex-col">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="font-semibold text-white flex items-center gap-2"><i data-lucide="list" class="w-4 h-4 text-indigoHi" aria-hidden="true"></i>Top Processes</h2>
+                    <span class="text-[10px] uppercase tracking-widest text-faint">by memory</span>
+                </div>
+                <div class="overflow-auto -mx-2 max-h-[340px]">
+                    <table class="w-full text-left text-xs min-w-[360px]">
+                        <thead>
+                            <tr class="text-[10px] uppercase tracking-widest text-faint">
+                                <th class="py-2 px-2 font-medium">PID</th>
+                                <th class="py-2 px-2 font-medium">Process</th>
+                                <th class="py-2 px-2 font-medium text-right">CPU</th>
+                                <th class="py-2 px-2 font-medium text-right">MEM</th>
+                            </tr>
+                        </thead>
+                        <tbody id="proc-body" class="divide-y divide-white/[0.04]"></tbody>
+                    </table>
                 </div>
             </div>
 
+            <!-- events / syslog -->
+            <div class="card p-5 flex flex-col">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="font-semibold text-white flex items-center gap-2"><i data-lucide="scroll-text" class="w-4 h-4 text-violetHi" aria-hidden="true"></i>System Log</h2>
+                    <span class="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-faint"><span class="pulse w-1.5 h-1.5 rounded-full bg-green"></span>live</span>
+                </div>
+                <div id="event-body" role="log" aria-live="polite" aria-label="System log stream"
+                    class="flex-1 overflow-auto max-h-[340px] space-y-2 pr-1 text-xs"></div>
+            </div>
         </section>
 
     </main>
 
-    <!-- ================= FOOTER ================= -->
-    <footer
-        class="mt-auto border-t border-slate-800/80 bg-slate-950/80 py-3 px-4 lg:px-8 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
-        <div class="flex flex-wrap items-center justify-center sm:justify-start gap-x-2 gap-y-1 font-mono">
-            <span class="text-cyan-400 font-bold uppercase">Live Server Monitoring</span>
-            <span class="capitalize">&bull; created by Maulana and assisted by AI</span>
-        </div>
-        <div class="flex items-center gap-4 text-[11px] font-mono">
-            <span class="text-emerald-400">SSE Transport (text/event-stream)</span>
+    <footer class="border-t border-white/[0.06] mt-6">
+        <div class="max-w-[1600px] mx-auto px-5 lg:px-8 h-14 flex items-center justify-between text-xs text-faint">
+            <span>ServMon · SSE Transport (text/event-stream)</span>
+            <span class="flex items-center gap-3">
+                <span class="flex items-center gap-1.5"><i data-lucide="shield-check" class="w-3.5 h-3.5 text-green" aria-hidden="true"></i>Secure</span>
+                <span class="flex items-center gap-1.5"><i data-lucide="gauge" class="w-3.5 h-3.5 text-indigoHi" aria-hidden="true"></i>Go</span>
+            </span>
         </div>
     </footer>
 
-    <!-- Logic dashboard: SSE, chart, KPI, terminal -->
+    <!-- tailwind-cdn safelist: classes built at runtime for log rows + link pill -->
+    <div hidden class="bg-indigoHi/10 border-indigoHi/30 text-indigoHi bg-red/10 border-red/30 text-red bg-amber/10 border-amber/30 text-amber bg-green/10 border-green/30 text-green"></div>
+
     <script src="./app.js"></script>
 </body>
 
